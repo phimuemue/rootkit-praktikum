@@ -9,3 +9,4 @@ You should have recieved the following files (in the archive ex1.tar):
 Note that generateSysmap.sh relies on grep and sed to transform system.map 
 into a C header file.
 
+Furthermore, for some reason Virtualbox sometimes can't compile the thing from within a shared folder.
