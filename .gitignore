@@ -1,0 +1,7 @@
+# Lines starting with '#' are considered comments.
+
+# Ignore objects and archives.
+*.[oa]
+
+# ignore qtcreator user settings
+*.creator.user 
