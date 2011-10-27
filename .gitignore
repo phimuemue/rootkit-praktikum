@@ -4,4 +4,7 @@
 *.[oa]
 
 # ignore qtcreator user settings
-*.creator.user 
+
+rootkit.creator.user
+
+sysmap.h
