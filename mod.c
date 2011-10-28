@@ -35,12 +35,13 @@ void make_page_readonly(long unsigned int _addr){
   //return set_memory_ro(_addr, 1);
 }
 
-//ssize_t hooked_read(int fd, void *buf, size_t count){
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
-    printk(KERN_INFO "This is a hooked function!!!");
-    ssize_t retval = original_read(fd, buf, count);
-  //printk(KERN_ALERT "hooked_read: params: fd: %d, buf: %d, count: %d~~~~~~~~~~ return value: %d \n", fd, (int)buf, count, retval);
-  return retval;
+    ssize_t retval;
+    if (*buf){
+        printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
+    }
+    retval = original_read(fd, buf, count);
+    return retval;
 }
 
 /* Hooks the read system call. */
@@ -57,6 +58,12 @@ void hook_function(void){
 
 }
 
+/* Hooks the read system call. */
+void unhook_function(void){
+  void** sys_call_table = (void *) ptr_sys_call_table;
+  make_page_writable((long unsigned int) ptr_sys_call_table);
+  sys_call_table[__NR_read] = (void*) original_read;
+}
 /* Print the number of running processes */
 int print_nr_procs(void){
     fun_int_void npf; // function pointer to function counting processes
@@ -80,7 +87,9 @@ static int __init _init_module(void)
 static void __exit _cleanup_module(void)
 {
     //sys_call_table[__NR_read] = original_read;
+    unhook_function();
     make_page_readonly((long unsigned int) ptr_sys_call_table);
+    unhook_function();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
 
