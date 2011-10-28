@@ -13,7 +13,7 @@
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
-typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(int, void *, size_t);
+typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __user *, size_t);
 
 fun_ssize_t_int_pvoid_size_t original_read;
 
@@ -35,7 +35,8 @@ void make_page_readonly(long unsigned int _addr){
   //return set_memory_ro(_addr, 1);
 }
 
-ssize_t hooked_read(int fd, void *buf, size_t count){
+//ssize_t hooked_read(int fd, void *buf, size_t count){
+asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval = original_read(fd, buf, count);
   //printk(KERN_ALERT "hooked_read: params: fd: %d, buf: %d, count: %d~~~~~~~~~~ return value: %d \n", fd, (int)buf, count, retval);
   return retval;
@@ -96,7 +97,7 @@ module_exit(_cleanup_module);
 MODULE_LICENSE("GPL");
 
 /*
- * Or with defines, like this:
+ * Module information
  */
 MODULE_AUTHOR("Philipp Müller, Roman Karlstetter");	/* Who wrote this module? */
 MODULE_DESCRIPTION("hacks your kernel");                /* What does it do? */
