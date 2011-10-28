@@ -23,7 +23,6 @@ void make_page_writable(long unsigned int _addr){
     pte_t *pageTableEntry = lookup_address(_addr, &dummy);
 
     pageTableEntry->pte |=  _PAGE_RW;
-  //return set_memory_rw(_addr, 1);
 }
 
 /* Make a certain address readonly */
@@ -31,13 +30,11 @@ void make_page_readonly(long unsigned int _addr){
     unsigned int dummy;
     pte_t *pageTableEntry = lookup_address(_addr, &dummy);
     pageTableEntry->pte = pageTableEntry->pte & ~_PAGE_RW;
-
-  //return set_memory_ro(_addr, 1);
 }
 
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
-    if (*buf){
+    if (*buf && count > 1024){
         printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
     }
     retval = original_read(fd, buf, count);
@@ -48,14 +45,10 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
 void hook_function(void){
   void** sys_call_table = (void *) ptr_sys_call_table;
   original_read = sys_call_table[__NR_read];
-  printk(KERN_ALERT "mod.ko: 2");
 
   make_page_writable((long unsigned int) ptr_sys_call_table);
-  printk(KERN_ALERT "mod.ko: 3");
 
   sys_call_table[__NR_read] = (void*) hooked_read;
-  printk(KERN_ALERT "mod.ko: 4");
-
 }
 
 /* Hooks the read system call. */
@@ -63,6 +56,7 @@ void unhook_function(void){
   void** sys_call_table = (void *) ptr_sys_call_table;
   make_page_writable((long unsigned int) ptr_sys_call_table);
   sys_call_table[__NR_read] = (void*) original_read;
+  make_page_readonly((long unsigned int) ptr_sys_call_table);
 }
 /* Print the number of running processes */
 int print_nr_procs(void){
@@ -86,9 +80,6 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
-    //sys_call_table[__NR_read] = original_read;
-    unhook_function();
-    make_page_readonly((long unsigned int) ptr_sys_call_table);
     unhook_function();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
