@@ -36,8 +36,9 @@ void make_page_readonly(long unsigned int _addr){
 }
 
 ssize_t hooked_read(int fd, void *buf, size_t count){
-  //printk(KERN_ALERT "hooked_read\n");
-  return original_read(fd, buf, count);
+    ssize_t retval = original_read(fd, buf, count);
+  //printk(KERN_ALERT "hooked_read: params: fd: %d, buf: %d, count: %d~~~~~~~~~~ return value: %d \n", fd, (int)buf, count, retval);
+  return retval;
 }
 
 /* Hooks the read system call. */
@@ -49,7 +50,7 @@ void hook_function(void){
   make_page_writable((long unsigned int) ptr_sys_call_table);
   printk(KERN_ALERT "mod.ko: 3");
 
-  sys_call_table[__NR_read] = (void*)hooked_read;
+  sys_call_table[__NR_read] = (void*) hooked_read;
   printk(KERN_ALERT "mod.ko: 4");
 
 }
