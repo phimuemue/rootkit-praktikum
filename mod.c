@@ -37,6 +37,7 @@ void make_page_readonly(long unsigned int _addr){
 
 //ssize_t hooked_read(int fd, void *buf, size_t count){
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
+    printk(KERN_INFO "This is a hooked function!!!");
     ssize_t retval = original_read(fd, buf, count);
   //printk(KERN_ALERT "hooked_read: params: fd: %d, buf: %d, count: %d~~~~~~~~~~ return value: %d \n", fd, (int)buf, count, retval);
   return retval;
