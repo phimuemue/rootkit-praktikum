@@ -10,7 +10,7 @@
 // since we had no problems without get/put, we commented it out
 // #define USE_MODULE_GET_PUT
 #ifdef USE_MODULE_GET_PUT
-#define OUR_TRY_MODULE_GET if (!try_module_get(THIS_MODULE)){return -1;}
+#define OUR_TRY_MODULE_GET if (!try_module_get(THIS_MODULE)){return -EAGAIN;}
 #define OUR_MODULE_PUT module_put(THIS_MODULE)
 #else
 #define OUR_TRY_MODULE_GET 
@@ -42,10 +42,10 @@ void make_page_readonly(long unsigned int _addr){
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
     OUR_TRY_MODULE_GET;
-    if (*buf && count > 1024){
-        printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
-    }
     retval = original_read(fd, buf, count);
+    if (*buf && count > 1024){
+        printk(KERN_INFO "%d = hooked_read(%d, %s, %d)", retval, fd, buf, count);
+    }
     OUR_MODULE_PUT;
     return retval;
 }
