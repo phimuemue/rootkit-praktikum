@@ -41,18 +41,11 @@ void make_page_readonly(long unsigned int _addr){
 
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
-    ssize_t i;
     char __user* cur_buf;
     OUR_TRY_MODULE_GET;
     retval = original_read(fd, buf, count);
     cur_buf = buf;
     if (retval > 0){
-        // printk(KERN_INFO "hooked_read: ");
-        // for (i=0; i<retval; ++i, cur_buf++){
-        //     printk(KERN_INFO "%c", *cur_buf);
-        // }
-        // printk(KERN_INFO "\n");
-        buf[retval] = 0;
         printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
     }
     OUR_MODULE_PUT;
