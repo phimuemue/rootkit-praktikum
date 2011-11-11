@@ -8,3 +8,15 @@
 rootkit.creator.user
 
 sysmap.h
+
+.mod.*
+.mod.ko
+
+mod.mod.c
+mod.ko
+
+modules.order
+
+Module.symvers
+
+.tmp_versions
