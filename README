@@ -4,13 +4,16 @@ You should have recieved the following files (in the archive ex1.tar):
  * README
  * generateSysmap.sh
  * Makefile
- * hello-1.c
+ * mod.c
+ * testprogramm.c
 
-We hook getdents64 to hide files beginning with the prefix "rootkit_".
-We simply call the original getdents-function, and iterate over the resulting
+We hook getdents64 (resp. getdents) to hide files beginning with the prefix "rootkit_".
+We simply call the original getdents-functions, and iterate over the resulting
 dirents. As soon as we find an entry with d_name beginning with "rootkit_",
 we "erase" it by moving the remaining part forward in memory (see code for
 intuitive description).
+Note that getdents64 is the function that is called in most of the cases.
+We tested getdents-hook using a test program (testprogram.c).
 We could also have done it by manipulating the previous item such that it 
 appears to be longer and thus kind of shades the item beginning with "rootkit_".
 This is, we modify d_reclen accordingly.
