@@ -22,3 +22,4 @@ Module.symvers
 .tmp_versions
 
 rootkit_*
+testprogramm
