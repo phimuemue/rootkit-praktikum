@@ -6,3 +6,4 @@ sysmap.h
 README
 testprogramm.c
 Makefile
+global.h
