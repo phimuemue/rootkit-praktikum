@@ -14,7 +14,7 @@
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
-
+// #include "hide_processes.c"  /* ugly, we've to change this... */
 
 
 
@@ -169,7 +169,10 @@ static int __init _init_module(void)
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
 
     print_nr_procs();
-    hook_functions();
+
+    // hide_processes();
+
+    // hook_functions();
     return 0;
 }
 
