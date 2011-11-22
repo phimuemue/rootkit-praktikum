@@ -6,6 +6,7 @@ You should have recieved the following files (in the archive ex1.tar):
  * Makefile
  * hide_processes.c
  * testprogramm.c
+ * global.h
 
 We hook the readdir call of the proc-filesystem to hide the specified tasks.
 "insmod hide_processes.ko pids_to_hide=1234,5678" loads the module and hides
