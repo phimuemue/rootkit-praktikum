@@ -1,6 +1,6 @@
 Rootkit Programming - Exercise 4
 
-You should have recieved the following files (in the archive ex1.tar):
+You should have recieved the following files:
  * README
  * create_sysmap.sh
  * Makefile

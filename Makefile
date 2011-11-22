@@ -3,7 +3,7 @@ obj-m += mod.o hide_processes.o
 all: sysmap.h testprogramm
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
 
-sysmap.h:
+sysmap.h: create_sysmap.sh
 		sh ./create_sysmap.sh
 
 testprogramm: testprogramm.c
