@@ -1,11 +1,17 @@
-Rootkit Programming - Exercise 3
+Rootkit Programming - Exercise 4
 
 You should have recieved the following files (in the archive ex1.tar):
  * README
- * generateSysmap.sh
+ * create_sysmap.sh
  * Makefile
- * mod.c
+ * hide_processes.c
  * testprogramm.c
+
+We hook the readdir call of the proc-filesystem to hide the specified tasks.
+"insmod hide_processes.ko pids_to_hide=1234,5678" loads the module and hides
+the tasks with pids 1234 and 5678, respectively.
+
+Rootkit Programming - Exercise 3
 
 We hook getdents64 (resp. getdents) to hide files beginning with the prefix "rootkit_".
 We simply call the original getdents-functions, and iterate over the resulting
