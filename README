@@ -8,9 +8,16 @@ You should have recieved the following files:
  * testprogramm.c
  * global.h
 
-We hook the readdir call of the proc-filesystem to hide the specified tasks.
-"insmod hide_processes.ko pids_to_hide=1234,5678" loads the module and hides
-the tasks with pids 1234 and 5678, respectively.
+We implemented filehiding in two different ways.
+First, we hook the readdir call of the proc-filesystem to hide the specified
+tasks. Second, we manipulate the task_structs in such a way that they are removed from the task tree, the tasks list and from the hash table used
+for quick lookup for task_structs.
+Currently, once the module is loaded, it removes some task_structs from the
+corresponding data structures. However, at unloading, no restoring of hidden 
+task_structs is done. However, it is easily possible to disable the removal
+of task_structs by commenting line 183 in hide_processes.c (where it says hide_processes();).
+"insmod hide_processes.ko pids_to_hide=1234,5678" loads the module and 
+hides the tasks with pids 1234 and 5678, respectively.
 
 Rootkit Programming - Exercise 3
 
