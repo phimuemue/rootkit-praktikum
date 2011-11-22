@@ -182,7 +182,7 @@ static int __init _init_module(void)
         OUR_DEBUG("%s\n", buf);
     }
 
-    hide_processes();
+    // hide_processes();
 
     hook_proc();
 
