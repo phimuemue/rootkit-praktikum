@@ -7,3 +7,5 @@ README
 testprogramm.c
 Makefile
 global.h
+module_hiding.c
+hook_read.h
