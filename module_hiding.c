@@ -14,7 +14,6 @@ char activate_pattern[] = "hallohallo";
 int size_of_pattern = sizeof(activate_pattern)-1;
 int cur_position = 0;
 int last_match = -1;
-int hidden = 0;
 
 struct list_head tos;
 

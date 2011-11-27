@@ -22,6 +22,7 @@
 #define OUR_DEBUG(...)
 #endif
 
+int hidden = 0;
 
 /* OTHER STUFF */
 
