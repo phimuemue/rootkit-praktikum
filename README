@@ -18,6 +18,12 @@ Our module gets invisible (i.e. it's not listed in /sys/module
 (sysfs hooking) and it's not listed in lsmod (removing from list
 of modules)) when you type "hallohallo" followed by 'h' (for hiding).
 It reappears again when you type "hallohallo" followed by 'u' (for unhiding).
+You should always press the enter key before you type in the keyword, so that
+the state of our pattern matching algorithm is reset.
+
+The name of our module is mod.ko, so insert it with insmod mod.ko
+
+
 
 
 Rootkit Programming - Exercise 4
