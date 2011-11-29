@@ -3,9 +3,12 @@ generateSysmap.sh
 mod.c
 hide_processes.c
 sysmap.h
+sysmap.c
 README
 testprogramm.c
 Makefile
 global.h
 module_hiding.c
 hook_read.h
+hook_read.c
+global.c

