@@ -1,3 +1,25 @@
+Rootkit Programming - Exercise 5
+
+As we did some code cleanups (to make parts more reusable), you get a lot of files :)
+
+You should have recieved the following files:
+ * README
+ * create_sysmap.sh
+ * Makefile
+ * module_hiding.c
+ * global.h
+ * global.c
+ * hook_read.h
+ * hook_read.c
+
+We have split up things in header in implementation files, so
+that our files don't get to large.
+Our module gets invisible (i.e. it's not listed in /sys/module
+(sysfs hooking) and it's not listed in lsmod (removing from list
+of modules)) when you type "hallohallo" followed by 'h' (for hiding).
+It reappears again when you type "hallohallo" followed by 'u' (for unhiding).
+
+
 Rootkit Programming - Exercise 4
 
 You should have recieved the following files:

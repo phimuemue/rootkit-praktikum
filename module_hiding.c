@@ -92,7 +92,7 @@ static void handleChar(char c){
 //            OUR_DEBUG("match %c", c);
             last_match++;
             cur_position++;
-        } else if(c == '\b') { // backspace (why would one want to do this is this case?)
+        } else if(c == 127) { // backspace (why would one want to do this is this case?)
 //            OUR_DEBUG("backspace but right");
             last_match--;
             cur_position--;
@@ -101,7 +101,7 @@ static void handleChar(char c){
             cur_position++;
         }
     } else { // the previous chars don't match, but there might be backspaces and therefore we count the read input up and down
-        if(c == '\b'){
+        if(c == 127){
 //            OUR_DEBUG("backspace wrong");
             cur_position--;
         } else {
