@@ -1,0 +1,28 @@
+\documentclass[10pt, letterpaper]{article}
+
+\usepackage [english]{babel}
+
+\title{Rootkit of gruppe 6}
+\author{Roman Karlstetter \and Philipp M\"uller}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Overview}
+
+This rootkit implements several functions, that can -- independently of each other -- be turned on and off. They are outlined here:
+
+\begin{description}
+\item [File hiding] It is possible to prevent some files to be shown. Files beginning with a certain prefix are hidden from e.g. \texttt{ls}. However, these files stay accessible.
+\item [Process hiding] It is possible to hide certain processes by their ID.
+\item [Module hiding] It is possible to hide the rootkit module from \texttt{lsmod}.
+\item [Socket hiding] The rootkit can hide certain TCP and UDP sockets from \texttt{netstat} and \texttt{ss}.
+\item [Privilege escalation]
+\item [Covert communication]
+\end{description}
+
+\section{Functions of the rootkit}
+
+\end{document}
