@@ -1,11 +1,23 @@
-Rootkit Programming - Exercise 3
+Rootkit Programming - Exercise 6
 
 You should have recieved the following files (in the archive ex1.tar):
  * README
  * generateSysmap.sh
  * Makefile
- * mod.c
- * testprogramm.c
+ * hide_sockets.c
+
+We implement socket hiding by hooking tcp_show and udp_show. This solves the task 
+for netstat. For ss, it solves UDP. In order to hide TCP sockets from ss, we also
+hook the function socketcall and return -1 by default. This makes ss call the function
+tcp_show as well and process its return values.
+
+To start the module, invoke it in one of the following ways (arguments should be
+self-explanatory):
+
+insmod hide_sockets.ko prot_to_hide="tcp" port_to_hide=25
+insmod hide_sockets.ko prot_to_hide="udp" port_to_hide=12345
+
+Rootkit Programming - Exercise 3
 
 We hook getdents64 (resp. getdents) to hide files beginning with the prefix "rootkit_".
 We simply call the original getdents-functions, and iterate over the resulting
