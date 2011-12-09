@@ -8,7 +8,15 @@ README
 testprogramm.c
 Makefile
 global.h
-module_hiding.c
+hide_module.c
 hook_read.h
 hook_read.c
 global.c
+hide_processes.h
+hide_files.c
+hide_files.h
+hide_sockets.c
+hide_sockets.h
+hide_module.h
+covert_communication.c
+covert_communication.h
