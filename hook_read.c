@@ -46,6 +46,7 @@ void hook_read(fun_void_charp_int cb){
 
 /* Hooks the read system call. */
 void unhook_read(void){
+    OUR_DEBUG("Unhooking read...\n");
     void** sys_call_table = (void *) ptr_sys_call_table;
     make_page_writable((long unsigned int) ptr_sys_call_table);
     sys_call_table[__NR_read] = (void*) original_read;
