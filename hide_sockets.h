@@ -1,3 +1,6 @@
 void load_sockethiding(void);
-void unload sockethiding(void);
-int socketToHide(char *protocol, int port);
+void unload_sockethiding(void);
+
+void hideTCP(int port);
+void hideUDP(int port);
+void unhideSocket(void);

