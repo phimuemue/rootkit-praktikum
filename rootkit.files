@@ -12,3 +12,6 @@ module_hiding.c
 hook_read.h
 hook_read.c
 global.c
+hide_processes.h
+hide_files.c
+hide_files.h
