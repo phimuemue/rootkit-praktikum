@@ -8,9 +8,12 @@
 rootkit.creator.user
 
 sysmap.h
+sysmap.c
 
-.mod.*
-.mod.ko
+mod.*
+*.ko
+.*.cmd
+*.mod.c
 
 mod.mod.c
 mod.ko
