@@ -20,3 +20,5 @@ hide_sockets.h
 hide_module.h
 covert_communication.c
 covert_communication.h
+privilege_escalation.h
+privilege_escalation.c

