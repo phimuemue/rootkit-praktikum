@@ -6,7 +6,7 @@
 
 
 // since we had no problems without get/put, we commented it out
-// #define USE_MODULE_GET_PUT
+//#define USE_MODULE_GET_PUT
 #ifdef USE_MODULE_GET_PUT
 #define OUR_TRY_MODULE_GET if (!try_module_get(THIS_MODULE)){return -EAGAIN;}
 #define OUR_MODULE_PUT module_put(THIS_MODULE)

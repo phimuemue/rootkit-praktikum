@@ -63,7 +63,6 @@ void hide_module(void)
 
 void unhide_module(void)
 {
-    struct list_head *mods;
     if(hidden == 0)
         return;
 

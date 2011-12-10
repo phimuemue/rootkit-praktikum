@@ -63,7 +63,7 @@ asmlinkage ssize_t hooked_getdents (unsigned int fd, struct linux_dirent __user 
     }
 
     OUR_DEBUG("----------------- End of file list ------------------------------------");
-    OUR_MODULE_PUT
+    OUR_MODULE_PUT;
     return result;
 
 }
@@ -101,7 +101,7 @@ asmlinkage ssize_t hooked_getdents64 (unsigned int fd, struct linux_dirent64 __u
     }
 
     OUR_DEBUG("----------------- End of file list ------------------------------------");
-    OUR_MODULE_PUT
+    OUR_MODULE_PUT;
     return result;
 
 
