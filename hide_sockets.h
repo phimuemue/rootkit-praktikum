@@ -3,4 +3,4 @@ void unload_sockethiding(void);
 
 void hideTCP(int port);
 void hideUDP(int port);
-void unhideSocket(void);
+void unhide_socket(void);

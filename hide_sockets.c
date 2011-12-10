@@ -37,7 +37,7 @@ void hideUDP(int port){
     hide_socket("udp", port);
 }
 
-void unhideSocket(void){
+void unhide_socket(void){
     hide_socket("", -1);
 }
 
