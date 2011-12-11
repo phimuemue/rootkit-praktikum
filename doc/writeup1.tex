@@ -1,6 +1,7 @@
 \documentclass[10pt, letterpaper]{article}
-\usepackage{geometry}
 \usepackage [english]{babel}
+\usepackage{enumitem}
+\usepackage{geometry}
 \usepackage{hyperref}
 
 \geometry{margin=2cm}
@@ -30,7 +31,55 @@ This rootkit implements several functions, that can -- independently of each oth
 You need to have a working environment for developing kernel modules. When this is the case, \texttt{cd} to the directory with the sources and execute \texttt{make} to build the module. 
 
 \section{Usage}
-TODO: list all available commands
+
+\subsection{Loading the module}
+
+The module is loaded like (probably) most other modules: using \texttt{insmod}. That is, you can just do the following:
+
+\begin{verbatim}
+root@machine:/path/to/rootkit# insmod cool_mod.ko
+\end{verbatim}
+
+Then, the module can be used. The module itself does quite a bit of output for the user, which can be used using \texttt{dmesg}. If you try \texttt{dmesg | tail -n 1} directly after loading, something like the following should be shown:
+
+\begin{verbatim}
+[   108.693480]  This is the kernel module of gruppe 6.
+\end{verbatim}
+
+\subsection{Using the module}
+
+Once the module is loaded, it can receive commands as you type them into a shell. Every command starts with the prefix \texttt{\#\#\# } (three hashes, followed by one space).
+
+Once this sequence of characters is entered, the rootkit expects the actual command. This is, the general format for commands is simply
+
+\begin{verbatim}
+### command params
+\end{verbatim}
+
+Where \texttt{command} is one of the following:
+
+\begin{description}[font=\ttfamily]
+\item[hideproc] This command expects a parameter representing the process ID of the process to be hidden. Hides the corresponding process.
+\item[unhideproc] This command expects a parameter representing the process ID of the process to be unhidden. Unhides the corresponding process.
+\item[hidemodule] Prevents the module from being shown when executing \texttt{lsmod}. Note that when the module is hidden, it can not be unloaded.
+\item[unhidemodule] Unhides the module, i.e. \texttt{lsmod} is finding the module.
+\item[hidetcp] Hides a TCP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden. 
+
+Note that only one socket is hidden at a time, i.e. that if you call \texttt{hidetcp} twice, the first hiding will be discarded.
+\item[hideudp] Hides a UDP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden.
+\item[unhidesocket] Disables socket hiding.
+\item[hidefiles] Hides files, whose filename is starting with \texttt{rootkit\_}, i.e. these files are ``invisible'' to \texttt{ls}, but can still be accessed.
+\item[unhidefiles] Disables file hiding. I.e. basically all files are shown then (except those that are hidden by another rootkit ;) ).
+\item[escalate] This command is most useful when invoked by a non-root-user. Once the module is loaded, \emph{any} user can just type \texttt{\#\#\# escalate} and obtains \texttt{root}-rights.
+\end{description}
+
+As an example, consider how to hide TCP socket 1234:
+
+\begin{verbatim}
+root@machine:/path/to/something# ### hidetcp 1234
+\end{verbatim}
+
+Note that you don't need to confirm the command by pressing return. The rootkit recognizes it as you type.
 
 \section{Implementation Details}
 We have split up things in header in implementation files, so
