@@ -2,4 +2,8 @@
 *.pdf
 *~
 *.log 
+*log
+
+*.backup
+*.out
 
