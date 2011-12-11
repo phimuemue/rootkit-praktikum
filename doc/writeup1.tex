@@ -1,7 +1,9 @@
 \documentclass[10pt, letterpaper]{article}
-
+\usepackage{geometry}
 \usepackage [english]{babel}
 \usepackage{hyperref}
+
+\geometry{margin=2cm}
 
 \title{Rootkit of gruppe 6}
 \author{Roman Karlstetter \and Philipp M\"uller}
@@ -73,6 +75,22 @@ We implement socket hiding by hooking the \texttt{show}-operation of the seq\_fi
 
 For tcp sockets displayed by ss, we hook the socketcall and return an error code when it gets called with a special combination of parameters. This lets ss also use its fallback alternative, which is \texttt{/proc} as already described.
 \subsection{Privilege Escalation}
+
+Privilege escalation is done using a simple mechanism: We set the user id of the current process to 0 (which corresponds to user \texttt{root}). This is done by the following code snippet\footnote{Note that these lines are just the central part of the \texttt{escalate} method.}:
+
+\begin{verbatim}
+void escalate(void){
+    struct cred *my_cred;
+    my_cred = prepare_creds(); 
+    my_cred->uid = my_cred->euid = my_cred->suid = my_cred->fsuid = 0;
+    my_cred->gid = my_cred->egid = my_cred->sgid = my_cred->fsgid = 0;
+    commit_creds(my_cred);
+}
+\end{verbatim}
+
+The function \texttt{prepare\_creds} creates a copy of the current threads credentials (i.e. user id, etc). We work on this copy (stored in \texttt{my\_cred}), and -- after modifying it -- apply the changes using \texttt{commit\_cred}.
+
+While one could think it would be more convenient to directly modify the task's credentials, this is explicitly discouraged in the linux source code\footnote{File \texttt{kernel/cred.c}}.
 
 \subsection{Covert Communication}
 We hook \texttt{sys\_read} and intercept all input from standard in. 
