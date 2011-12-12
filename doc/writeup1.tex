@@ -34,7 +34,7 @@ This rootkit implements several functions, that can -- independently of each oth
 \end{description}
 
 \section{Building \& Installing}
-You need to have a working environment for developing kernel modules. When this is the case, \texttt{cd} to the directory with the sources and execute \texttt{make} to build the module. 
+You need to have a working environment for developing kernel modules. When this is the case, \texttt{cd} to the directory with the sources and execute \texttt{make} to build the module. This will create a file called \texttt{cool\_mod.ko}, which contains the compiled module.
 
 \section{Usage}
 
@@ -56,7 +56,7 @@ Then, the module can be used. The module itself does quite a bit of output for t
 
 Once the module is loaded, it can receive commands as you type them into a shell. Every command starts with the prefix \texttt{\#\#\# } (three hashes, followed by one space).
 
-Once this sequence of characters is entered, the rootkit expects the actual command. This is, the general format for commands is simply
+Once this sequence of characters is entered, the rootkit expects the actual command. After the actual command, there might be a parameter (separated by a space from the command). Thus, the general format for commands is simply as follows:
 
 \begin{verbatim}
 ### command params
@@ -88,8 +88,56 @@ root@machine:/path/to/something# ### hidetcp 1234
 Note that you don't need to confirm the command by pressing return. The rootkit recognizes it as you type.
 
 \section{Implementation Details}
+
 We have split up things in header in implementation files, so
-that our files don't get to large.
+that our files don't get too large. The file names should be self-explanatory, but we should mention some things explicitly:
+
+The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \texttt{create\_sysmap.h}. This script scans the ``system map'' of Linux (which is where all important function pointers to system call functions and other system functions are stored). All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
+
+Note that all these pointers are of type \texttt{void*}, since we do not know their type a priori. They are later casted as needed.
+
+\subsection{``Hooking'' functions in general}
+
+A very important aspect of a rootkit is hooking of functions. This means, we ``grab'' an original system function (which may be called by other programs!), and replace it by our own function. This way, everytime another program tries to call the original function, it automatically calls \emph{our} ``injected'' function. Of course, the injected function should behave as if it was the original function, so that the other programs (and, thus, the user) do not recognize that we have manipulated the system function.
+
+So, how is this hooking done programmatically? Let us consider how we hook the \texttt{read} system call, for example. This is done by the following code snippet\footnote{This is not the original source code of the rootkit, but just an excerpt of this function.}:
+
+\begin{verbatim}
+void hook_read(fun_void_charp_int cb){
+    void** sys_call_table = (void *) ptr_sys_call_table;
+    original_read = sys_call_table[__NR_read];
+    make_page_writable((long unsigned int) ptr_sys_call_table);
+    sys_call_table[__NR_read] = (void*) hooked_read;
+    make_page_readonly((long unsigned int) ptr_sys_call_table);
+}
+\end{verbatim}
+
+Let us consider this function line by line. First, we locate the system call table, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \todo{which type???}}. This is necessary for several reasons: First, we want to be able to restore the original call if we want to unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand.
+
+Let us -- for now -- skip the next line and directly consider the following line from the above snippet:
+
+\begin{verbatim}
+    sys_call_table[__NR_read] = (void*) hooked_read;
+\end{verbatim}
+
+This line \emph{modifies} the system call table in such a way that if some program is issuing a system call to \texttt{read}, it will actually invoke our own function \texttt{hooked\_read}. The constant \texttt{\_\_NR\_read} is defined as a macro somewhere in the Linux kernel source code and denotes the position in the system call table, where the function pointer to the \texttt{read} system call is stored.
+
+The above line is the most crucial one when it comes to system call hooking, since it actually sets the function pointer to our function.
+
+So the only point left is what the functions \texttt{make\_page\_writable} and \texttt{make\_page\_readonly} are doing.
+
+As it turns out, Linux 2.6 has some memory protection so that you can not modify e.g. the system call table at will. Instead, one has to first remove this write protection. This is exactly what \texttt{make\_page\_writable} does. It is defined in \texttt{global.c} as follows:
+
+\begin{verbatim}
+void make_page_writable(long unsigned int _addr){
+    unsigned int dummy;
+    pte_t *pageTableEntry = lookup_address(_addr, &dummy);
+    pageTableEntry->pte |=  _PAGE_RW;
+}
+\end{verbatim}
+
+That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}. \todo{Is this correct, what I'm writing here?}
+
 \subsection{File Hiding}
 \label{filehiding}
 We hook \texttt{getdents64} (resp. \texttt{getdents}) to hide files beginning with the prefix \textit{rootkit\_}. 
