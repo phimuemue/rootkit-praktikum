@@ -2,7 +2,10 @@
 \usepackage [english]{babel}
 \usepackage{enumitem}
 \usepackage{geometry}
+\usepackage{color}
 \usepackage{hyperref}
+
+\newcommand{\todo}[1]{\textcolor{red}{TODO: #1}}
 
 \geometry{margin=2cm}
 
@@ -91,7 +94,7 @@ Therefore, we simply call the original \texttt{getdents}-function and iterate ov
 \texttt{dirent}s. As soon as we find an entry whose \texttt{d\_name} begins with \textit{rootkit\_},
 we "erase" it by moving the remaining part forward in memory. 
 
-TODO: some nice image describing this :)
+\todo{some nice image describing this :)}
 
 Note that \texttt{getdents64} is the function that is called in most of the cases.
 We tested \texttt{getdents} using a test program (testprogram.c).
