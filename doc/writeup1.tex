@@ -6,11 +6,11 @@
 \usepackage{tikz}
 \usetikzlibrary{snakes}
 \usetikzlibrary{patterns}
-\usepackage{hyperref}
+\usepackage[pdfborder={0 0 0}]{hyperref}
 
 \newcommand{\todo}[1]{\textcolor{red}{TODO: #1}}
 
-\geometry{margin=4cm}
+\geometry{margin=3.5cm}
 
 \title{Rootkit of gruppe 6}
 \author{Roman Karlstetter \and Philipp M\"uller}
@@ -90,17 +90,19 @@ Note that you don't need to confirm the command by pressing return. The rootkit 
 \section{Implementation Details}
 
 We have split up things in header in implementation files, so
-that our files don't get too large. The file names should be self-explanatory, but we should mention some things explicitly:
+that our files don't get too large. The file names should be self-explanatory, but we should mention some things explicitly.
 
-The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \texttt{create\_sysmap.h}. This script scans the ``system map'' of Linux (which is where all important function pointers to system call functions and other system functions are stored). All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
+The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \linebreak \texttt{create\_sysmap.h}. This script scans the ``system map'' of Linux (which is where all important function pointers to system call functions and other system functions are stored). All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
 
 Note that all these pointers are of type \texttt{void*}, since we do not know their type a priori. They are later casted as needed.
+
+\emph{Remark:} In the following, we present some code snippets. They are basically taken from our rootkit source code, but we shortened them a bit and describe just the crucial parts of them.
 
 \subsection{``Hooking'' functions in general}
 
 A very important aspect of a rootkit is hooking of functions. This means, we ``grab'' an original system function (which may be called by other programs!), and replace it by our own function. This way, everytime another program tries to call the original function, it automatically calls \emph{our} ``injected'' function. Of course, the injected function should behave as if it was the original function, so that the other programs (and, thus, the user) do not recognize that we have manipulated the system function.
 
-So, how is this hooking done programmatically? Let us consider how we hook the \texttt{read} system call, for example. This is done by the following code snippet\footnote{This is not the original source code of the rootkit, but just an excerpt of this function.}:
+So, how is this hooking done programmatically? Let us consider how we hook the \texttt{read} system call, for example. This is done by the following code snippet:
 
 \begin{verbatim}
 void hook_read(fun_void_charp_int cb){
@@ -112,7 +114,7 @@ void hook_read(fun_void_charp_int cb){
 }
 \end{verbatim}
 
-Let us consider this function line by line. First, we locate the system call table, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \todo{which type???}}. This is necessary for several reasons: First, we want to be able to restore the original call if we want to unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand.
+Let us consider this function line by line. First, we locate the system call table, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \texttt{asmlinkage ssize\_t (*)(unsigned int, char \_\_user *, size\_t)}. This is a pointer to a function returning a value of type \texttt{size\_t} and taking three arguments, just like the original \texttt{read} system call declared in \texttt{linux/syscalls.h} in the Linux kernel.}. This is necessary for several reasons: First, we want to be able to restore the original call if we want to unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand.
 
 Let us -- for now -- skip the next line and directly consider the following line from the above snippet:
 
@@ -126,7 +128,7 @@ The above line is the most crucial one when it comes to system call hooking, sin
 
 So the only point left is what the functions \texttt{make\_page\_writable} and \texttt{make\_page\_readonly} are doing.
 
-As it turns out, Linux 2.6 has some memory protection so that you can not modify e.g. the system call table at will. Instead, one has to first remove this write protection. This is exactly what \texttt{make\_page\_writable} does. It is defined in \texttt{global.c} as follows:
+As it turns out, Linux 2.6 has some memory protection mechanism so that you can not modify certain memory sections (e.g. and in particular the system call table) at will. Instead, one has to first remove this write protection. This is exactly what \texttt{make\_page\_writable} does. It is defined in \texttt{global.c} as follows:
 
 \begin{verbatim}
 void make_page_writable(long unsigned int _addr){
@@ -138,12 +140,14 @@ void make_page_writable(long unsigned int _addr){
 
 That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}. \todo{Is this correct, what I'm writing here?}
 
+Hooking functions is basically done in this way. Note that the functions we want to hook need not necessarily reside in the system call table, but can be at other locations as well. The mechanism of hooking, however, is equivalent.
+
 \subsection{File Hiding}
 \label{filehiding}
-We hook \texttt{getdents64} (resp. \texttt{getdents}) to hide files beginning with the prefix \textit{rootkit\_}. 
+We hook \texttt{getdents64} (resp. \texttt{getdents}) to hide files beginning with the prefix \texttt{rootkit\_}. 
 Therefore, we simply call the original \texttt{getdents}-function and iterate over the resulting
-\texttt{dirent}s. As soon as we find an entry whose \texttt{d\_name} begins with \textit{rootkit\_},
-we "erase" it by moving the remaining part forward in memory. This process is shown in figure \ref{fig:filehiding}.
+\texttt{dirent}s. As soon as we find an entry whose \texttt{d\_name} begins with \texttt{rootkit\_},
+we ``erase'' it by moving the remaining part forward in memory. This process is shown in figure \ref{fig:filehiding}.
 
 
 \begin{figure}[t]
@@ -159,7 +163,7 @@ we "erase" it by moving the remaining part forward in memory. This process is sh
   \node at (\x*2 + 1, 0) [above] {\texttt{file\_\x}};
 \draw (12, 0.5) -- (15, 0.5) [snake=zigzag, pattern = north east lines] -- (15, 0) [snake=none]-- (12,0) -- (12, 0.5);
 \node at (13.5, 0) [above] {\texttt{0x123}};
-\draw (12, 1)[above] node {Boundary before} [dashed, thick] -- (12, -0.5);
+\draw (12, 1)[above] node {Boundary before (original no. bytes)} [dashed, thick] -- (12, -0.5);
 %% afterwards
 \foreach \x in {1} 
   \draw [draw=black] (\x*2,-1) rectangle (\x*2+2,-1.5);
@@ -171,28 +175,65 @@ we "erase" it by moving the remaining part forward in memory. This process is sh
 \node at (11, -1.5) [above] {\texttt{file\_5}};
 \draw (10, -1) -- (15, -1) [snake=zigzag, pattern = north east lines] -- (15, -1.5) [snake=none]-- (10,-1.5) -- (10, -1);
 \node at (13.5, -1.5) [above] {\texttt{0x123}};
-\draw (10, -0.5) [dashed, thick] -- (10, -2) [below] node {Boundary afterwards};
+\draw (10, -0.5) [dashed, thick] -- (10, -2) [below] node {Boundary afterwards (modified no. of bytes)};
 %% arrows
 \draw [->, draw=black, thick] (6,0) -- (4, -1);
 \draw [->, draw=black, thick] (12,0) -- (10, -1);
 \end{tikzpicture}
-\caption{Hiding files by overwriting the file to be hidden and adjusting the number of returned bytes}
+\caption{The file \texttt{rootkit\_} is overwritten by copying the remaining buffer forward. Note that the number of bytes returned are adjusted (indicated by boundaries).}
 \label{fig:filehiding}
 \end{figure}
 
 Note that \texttt{getdents64} is the function that is called in most of the cases.
 We tested \texttt{getdents} using a test program (testprogram.c).
 
-Another implementation alternative would have been to manipulate the element preceeding the respective entries, such that it 
-appears to be longer and thus kind of shades the item beginning with \textit{rootkit\_}.
-This is done by modifying \texttt{d\_reclen} accordingly.
+Another implementation alternative would have been to manipulate the element preceeding the entry to be hidden, such that it appears to be longer and thus kind of shades the item beginning with \texttt{rootkit\_}. Each \texttt{dirent} has a member \texttt{d\_reclen}, which stores the length of the \texttt{dirent} itself. Thus, we also could manipulate \texttt{d\_reclen} accordingly. 
+
+However, this alternative approach brings quite some overhead in code, because you need e.g. additional tests whether the element to be hidden is the first element (the hard case) or somewhere in the middle (that works quite well).
 
 \subsection{Process Hiding}
-Currently, we hook the readdir call of the proc-filesystem to hide the specified
-tasks (just as in \autoref{filehiding}).
 
-Another way to hide processes is to remove the respective task from the hash table 
-which is used for looking up the tasks and generating the entries in proc.
+\label{sec:process-hiding}
+
+Currently, we hook the \texttt{readdir} call of the \texttt{proc}-filesystem to hide the specified tasks (just as in \autoref{filehiding}). Moreover, we also employ a custom \texttt{filldir} function\footnote{\texttt{filldir\_t} is an own type in the Linux kernel for a function used to fill the contents of \texttt{readdir}.}, which actually hides the processes.
+
+The hooked \texttt{readdir} function is quite simple:
+
+\begin{verbatim}
+int hooked_readdir(struct file *filep, void *dirent, filldir_t filldir){
+    original_proc_fillfir = filldir;
+    return proc_original_readdir(filep, dirent, hooked_proc_filldir);
+}
+\end{verbatim}
+
+First, we remember the original \texttt{filldir} function so we can use it later. Afterwards, we call the \emph{original} \texttt{readdir} function, but we give our own \texttt{hooked\_proc\_filldir} as parameter to it. So, we ``just change parameters'' to the function.
+
+It remains to show our hooked \texttt{filldir} function:
+
+\begin{verbatim}
+int hooked_proc_filldir (void *__buf, const char *name, int namelen, 
+                         loff_t offset, u64 ino, unsigned d_type){
+    char buf[512];
+    struct proc_to_hide* cur;
+    for(cur = processes_to_hide; cur != 0; cur = cur->next){
+        sprintf(buf, "%d", cur->pid);
+        if(strcmp(buf, name)==0){
+            // If we come here, we hide the process.
+            return 0;
+        }
+    }
+    // If we come here, we just delegate everything to the original function.
+    return original_proc_fillfir(__buf, name, namelen, offset, ino, d_type);
+}
+\end{verbatim}
+
+As you can see, these kind of functions accept quite a bunch of arguments. But we need only one of them: \texttt{name} -- it holds a PID (formatted as a array of \texttt{char}s). 
+
+All the other parameters are possibly passed to the original \texttt{filldir} function.
+
+The function does essentially the following: It traverses the list, where we store the process IDs of the processes we want to hide. If it finds that the current PID is to be hidden, it just returns 0, indicating that the current call did not produce any output. This causes the callee just to ignore the corresponding process. If no such PID is found, it just delegates the work to \texttt{original\_proc\_filldir}, which then acts just like there was no interception at all.
+
+Another way to hide processes is to remove the respective task from the hash table which is used for looking up the tasks and generating the entries in proc.
 
 \subsection{Module Hiding}
 To hide the module, we 
@@ -201,18 +242,27 @@ To hide the module, we
  \item hook the \texttt{readdir} operation of the sysfs.
 \end{itemize}
 
-The first point is pretty straightforward, once you have the pointer to the list of modules.
-For the second one, you have to hook also create a \texttt{filldir}-function which gets called by the hooked readdir operation and returns 0 when called with this module as parameter.
+The first point is pretty straightforward, once you have the pointer to the list of modules. The following line accomplishes this:
+
+\begin{verbatim}
+list_del(&(THIS_MODULE->list));
+\end{verbatim}
+
+This line relies on some macros defined in the Linux kernel sources: \texttt{list\_del} removes an item from a linked list and \texttt{THIS\_MODULE} is a pointer to a \texttt{struct module} representing the module it is invoked from. So, the line removes \emph{our} module from the list of modules.
+
+To remove the module from \texttt{/sys/modules}, you have to hook also create a \texttt{filldir}-function which gets called by the hooked readdir operation (for the \texttt{sys}-filesystem this time) and returns 0 when called with this module as parameter. This mechanism is similar to the one described in \autoref{sec:process-hiding}.
 
 \subsection{Socket Hiding}
-Hiding sockets means that they are not displayed by neither netstat nor ss.
-Netstat gets all its information through \texttt{/proc}, ss gets the tcp-socket information through the NETLINK interface of the kernel (when this is available), the udp information is also from \texttt{/proc}.
-We implement socket hiding by hooking the \texttt{show}-operation of the seq\_file interface (only of tcp and udp socket-files in \texttt{/proc/net}, of course). Therefore We look at the port and the protocol of the passed \texttt{struct socket} and compare it with the socket to hide.
 
-For tcp sockets displayed by ss, we hook the socketcall and return an error code when it gets called with a special combination of parameters. This lets ss also use its fallback alternative, which is \texttt{/proc} as already described.
+Hiding sockets means that they are not displayed by neither \texttt{netstat} nor \texttt{ss}. \texttt{netstat} gets all its information through \texttt{/proc}, while \texttt{ss} gets the TCP-socket information through the NETLINK interface of the kernel (when this is available), the UDP information is also from \texttt{/proc}.
+
+We implement socket hiding by hooking the \texttt{show}-operation of the \texttt{seq\_file} interface (only of tcp and udp socket-files in \texttt{/proc/net}, of course). Therefore we look at the port and the protocol of the passed \texttt{struct socket} and compare it with the socket to hide.
+
+For TCP sockets displayed by \texttt{ss}, we hook the \texttt{socketcall} function and return an error code when it gets called with a special combination of parameters. This lets \texttt{ss} also use its fallback alternative, which is \texttt{/proc} as already described.
+
 \subsection{Privilege Escalation}
 
-Privilege escalation is done using a simple mechanism: We set the user id of the current process to 0 (which corresponds to user \texttt{root}). This is done by the following code snippet\footnote{Note that these lines are just the central part of the \texttt{escalate} method.}:
+Privilege escalation is done using a simple mechanism: We set the user id of the current process to 0 (which corresponds to user \texttt{root}). This is done by the following code snippet:
 
 \begin{verbatim}
 void escalate(void){
