@@ -6,6 +6,7 @@
 \usepackage{tikz}
 \usetikzlibrary{snakes}
 \usetikzlibrary{patterns}
+\usepackage[loose]{subfigure}
 \usepackage[pdfborder={0 0 0}]{hyperref}
 
 \newcommand{\todo}[1]{\textcolor{red}{TODO: #1}}
@@ -100,7 +101,39 @@ Note that all these pointers are of type \texttt{void*}, since we do not know th
 
 \subsection{``Hooking'' functions in general}
 
-A very important aspect of a rootkit is hooking of functions. This means, we ``grab'' an original system function (which may be called by other programs!), and replace it by our own function. This way, everytime another program tries to call the original function, it automatically calls \emph{our} ``injected'' function. Of course, the injected function should behave as if it was the original function, so that the other programs (and, thus, the user) do not recognize that we have manipulated the system function.
+A very important aspect of a rootkit is hooking of functions. This means, we ``grab'' an original system function (which may be called by other programs!), and replace it by our own function. This way, everytime another program tries to call the original function, it automatically calls \emph{our} ``injected'' function. \autoref{fig:hooking-system-call} shows this mechanism as a schema.
+
+Of course, the injected function should behave as if it was the original function, so that the other programs (and, thus, the user) do not recognize that we have manipulated the system function.
+
+\begin{figure}[t]
+  \centering
+  \subfigure[Before hooking. Pointer to the original \texttt{sys\_read} system call.]{
+    \begin{tikzpicture}
+      \draw (0,0) rectangle (2,3);
+      \node at (1,3) [above] {System call table};
+      \draw (0,1) rectangle (2,1.5);
+      \node (p) at (1,1) [above] {\texttt{0x15bf102a}};
+      \node (f) [shape=rectangle, draw=black] at (4,2.5) {\texttt{sys\_read}};
+      \node (hf) [draw opacity=0.5, fill opacity=0.5, shape=rectangle, draw=black] at (4,1) {\texttt{hooked\_read}};
+      \draw [->] (2,1.25) .. controls +(1,0) and +(-1,0) .. (f.west);
+    \end{tikzpicture}
+  }
+  \subfigure[After hooking. Pointer to \texttt{hooked\_read}, which itself can use \texttt{sys\_read}.]{
+    \begin{tikzpicture}
+      \draw (0,0) rectangle (2,3);
+      \node at (1,3) [above] {System call table};
+      \draw (0,1) rectangle (2,1.5);
+      \node (p) at (1,1) [above] {\texttt{0xab431d01}};
+      \node (f) [shape=rectangle, draw=black] at (4,2.5) {\texttt{sys\_read}};
+      \node (hf) [shape=rectangle, draw=black] at (4,1) {\texttt{hooked\_read}};
+      \draw [->] (2,1.25) .. controls +(0.5,0) and +(-0.5,0) .. (hf.west);
+      %%\draw [->, dashed] (hf.north) -- (f.south) node [right, midway, text width=3cm] {\texttt{hooked\_read} can use \texttt{sys\_read}};
+      \draw [->, dashed] (hf.north) -- (f.south);
+    \end{tikzpicture}
+  }
+  \caption{Hooking a system call function}
+  \label{fig:hooking-system-call}
+\end{figure}
 
 So, how is this hooking done programmatically? Let us consider how we hook the \texttt{read} system call, for example. This is done by the following code snippet:
 
@@ -138,7 +171,7 @@ void make_page_writable(long unsigned int _addr){
 }
 \end{verbatim}
 
-That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}. \todo{Is this correct, what I'm writing here?}
+That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}). \todo{Is this correct, what I'm writing here?}
 
 Hooking functions is basically done in this way. Note that the functions we want to hook need not necessarily reside in the system call table, but can be at other locations as well. The mechanism of hooking, however, is equivalent.
 
@@ -161,7 +194,7 @@ we ``erase'' it by moving the remaining part forward in memory. This process is 
   \draw [draw=black, fill opacity=0.1, fill=black] (\x*2,0) rectangle (\x*2+2,0.5);
 \foreach \x in {1,3,4,5}
   \node at (\x*2 + 1, 0) [above] {\texttt{file\_\x}};
-\draw (12, 0.5) -- (15, 0.5) [snake=zigzag, pattern = north east lines] -- (15, 0) [snake=none]-- (12,0) -- (12, 0.5);
+\draw (12, 0.5) -- (15, 0.5) [snake=snake, pattern = north east lines] -- (15, 0) [snake=none]-- (12,0) -- (12, 0.5);
 \node at (13.5, 0) [above] {\texttt{0x123}};
 \draw (12, 1)[above] node {Boundary before (original no. bytes)} [dashed, thick] -- (12, -0.5);
 %% afterwards
@@ -173,7 +206,7 @@ we ``erase'' it by moving the remaining part forward in memory. This process is 
   \node at (\x*2 - 1, -1.5) [above] {\texttt{file\_\x}};
 \node at (3, -1.5) [above] {\texttt{file\_1}};
 \node at (11, -1.5) [above] {\texttt{file\_5}};
-\draw (10, -1) -- (15, -1) [snake=zigzag, pattern = north east lines] -- (15, -1.5) [snake=none]-- (10,-1.5) -- (10, -1);
+\draw (10, -1) -- (15, -1) [snake=snake, pattern = north east lines] -- (15, -1.5) [snake=none]-- (10,-1.5) -- (10, -1);
 \node at (13.5, -1.5) [above] {\texttt{0x123}};
 \draw (10, -0.5) [dashed, thick] -- (10, -2) [below] node {Boundary afterwards (modified no. of bytes)};
 %% arrows
