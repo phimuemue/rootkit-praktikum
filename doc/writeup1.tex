@@ -3,11 +3,14 @@
 \usepackage{enumitem}
 \usepackage{geometry}
 \usepackage{color}
+\usepackage{tikz}
+\usetikzlibrary{snakes}
+\usetikzlibrary{patterns}
 \usepackage{hyperref}
 
 \newcommand{\todo}[1]{\textcolor{red}{TODO: #1}}
 
-\geometry{margin=2cm}
+\geometry{margin=4cm}
 
 \title{Rootkit of gruppe 6}
 \author{Roman Karlstetter \and Philipp M\"uller}
@@ -92,9 +95,42 @@ that our files don't get to large.
 We hook \texttt{getdents64} (resp. \texttt{getdents}) to hide files beginning with the prefix \textit{rootkit\_}. 
 Therefore, we simply call the original \texttt{getdents}-function and iterate over the resulting
 \texttt{dirent}s. As soon as we find an entry whose \texttt{d\_name} begins with \textit{rootkit\_},
-we "erase" it by moving the remaining part forward in memory. 
+we "erase" it by moving the remaining part forward in memory. This process is shown in figure \ref{fig:filehiding}.
 
-\todo{some nice image describing this :)}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}
+%% before
+\foreach \x in {1,2} 
+  \draw [draw=black] (\x*2,0) rectangle (\x*2+2,0.5);
+\node at (5,0) [above] {\texttt{rootkit\_}};
+\foreach \x in {3,4,5} 
+  \draw [draw=black, fill opacity=0.1, fill=black] (\x*2,0) rectangle (\x*2+2,0.5);
+\foreach \x in {1,3,4,5}
+  \node at (\x*2 + 1, 0) [above] {\texttt{file\_\x}};
+\draw (12, 0.5) -- (15, 0.5) [snake=zigzag, pattern = north east lines] -- (15, 0) [snake=none]-- (12,0) -- (12, 0.5);
+\node at (13.5, 0) [above] {\texttt{0x123}};
+\draw (12, 1)[above] node {Boundary before} [dashed, thick] -- (12, -0.5);
+%% afterwards
+\foreach \x in {1} 
+  \draw [draw=black] (\x*2,-1) rectangle (\x*2+2,-1.5);
+\foreach \x in {3,4,5} 
+  \draw [draw=black, fill opacity=0.1, fill=black] (\x*2-2,-1) rectangle (\x*2,-1.5);
+\foreach \x in {3,4,5}
+  \node at (\x*2 - 1, -1.5) [above] {\texttt{file\_\x}};
+\node at (3, -1.5) [above] {\texttt{file\_1}};
+\node at (11, -1.5) [above] {\texttt{file\_5}};
+\draw (10, -1) -- (15, -1) [snake=zigzag, pattern = north east lines] -- (15, -1.5) [snake=none]-- (10,-1.5) -- (10, -1);
+\node at (13.5, -1.5) [above] {\texttt{0x123}};
+\draw (10, -0.5) [dashed, thick] -- (10, -2) [below] node {Boundary afterwards};
+%% arrows
+\draw [->, draw=black, thick] (6,0) -- (4, -1);
+\draw [->, draw=black, thick] (12,0) -- (10, -1);
+\end{tikzpicture}
+\caption{Hiding files by overwriting the file to be hidden and adjusting the number of returned bytes}
+\label{fig:filehiding}
+\end{figure}
 
 Note that \texttt{getdents64} is the function that is called in most of the cases.
 We tested \texttt{getdents} using a test program (testprogram.c).
