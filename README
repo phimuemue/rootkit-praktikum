@@ -1,103 +1,22 @@
-Rootkit Programming - Exercise 6
+Rootkit Programming - Exercise 7
 
-You should have recieved the following files (in the archive ex1.tar):
- * README
- * generateSysmap.sh
- * Makefile
- * hide_sockets.c
+You should have received a PDF containing how to compile, insert and use our rootkit module.
+Please note that this PDF is not the final writeup. For now, it just serves just as a manual
+for you so that you know how to use the module.
 
-We implement socket hiding by hooking tcp_show and udp_show in procfs. This solves the task 
-for netstat. For ss, it solves UDP. In order to hide TCP sockets from ss, we also
-hook the function socketcall and return -1 by default. This makes ss call the function
-tcp_show as well and process its return values.
+Nonetheless, we describe here shortly how to enter a command over the covert communication
+channel: Let's assume, you want to hide TCP socket with port 1234. Therefore, you first have
+to load the module:
 
-To start the module, invoke it in one of the following ways (arguments should be
-self-explanatory):
+insmod cool_mod.ko
 
-insmod hide_sockets.ko prot_to_hide=tcp port_to_hide=25
-insmod hide_sockets.ko prot_to_hide=udp port_to_hide=12345
+After this, you can just type in commands in the shell. Commands start with "### " (three 
+hashes followed by a space). Afterwards comes the command, and - separated by again a space -
+optional an argument. The whole command is confirmed by a space again. So, you just enter the 
+following into the command line:
 
+###<space>hidetcp<space>1234<space>
 
-Rootkit Programming - Exercise 5
-
-As we did some code cleanups (to make parts more reusable), you get a lot of files :)
-
-You should have recieved the following files:
- * README
- * create_sysmap.sh
- * Makefile
- * module_hiding.c
- * global.h
- * global.c
- * hook_read.h
- * hook_read.c
-
-We have split up things in header in implementation files, so
-that our files don't get to large.
-Our module gets invisible (i.e. it's not listed in /sys/module
-(sysfs hooking) and it's not listed in lsmod (removing from list
-of modules)) when you type "hallohallo" followed by 'h' (for hiding).
-It reappears again when you type "hallohallo" followed by 'u' (for unhiding).
-You should always press the enter key before you type in the keyword, so that
-the state of our pattern matching algorithm is reset.
-
-The name of our module is mod.ko, so insert it with insmod mod.ko
+Each <space> has to be replaced by a real space. For more information, please look at the manual.
 
 
-
-
-Rootkit Programming - Exercise 4
-
-You should have recieved the following files:
- * README
- * create_sysmap.sh
- * Makefile
- * hide_processes.c
- * testprogramm.c
- * global.h
-
-We implemented filehiding in two different ways. However, only one of them is
-currently active in the module.
-Currently, we hook the readdir call of the proc-filesystem to hide the specified
-tasks. As an alternative, we manipulate the task_structs in such a way that
-they are removed from the task tree, the tasks list and from the hash table 
-used for quick lookup for task_structs. However, this alternative does not
-restore hidden processes after unloading.
-The alternative can easily be enabled by uncommenting line 185 in 
-hide_processes.c (where it says hide_processes();).
-"insmod hide_processes.ko pids_to_hide=1234,5678" loads the module and 
-hides the tasks with pids 1234 and 5678, respectively.
-
-Rootkit Programming - Exercise 3
-
-We hook getdents64 (resp. getdents) to hide files beginning with the prefix "rootkit_".
-We simply call the original getdents-functions, and iterate over the resulting
-dirents. As soon as we find an entry with d_name beginning with "rootkit_",
-we "erase" it by moving the remaining part forward in memory (see code for
-intuitive description).
-Note that getdents64 is the function that is called in most of the cases.
-We tested getdents-hook using a test program (testprogram.c).
-We could also have done it by manipulating the previous item such that it 
-appears to be longer and thus kind of shades the item beginning with "rootkit_".
-This is, we modify d_reclen accordingly.
-We've actually implemented it, but we like the other solution more.
-
-Rootkit Programming - Exercise 2
-
-We hook sys_read by changing the function pointer in the system call table
-to a function hooked_read accepting the same parameters as the original
-read function. hooked_read prints out all parameters and the result of the 
-original read call.
-
-We considered using try_module_get and put_module to avoid "unallowed unloading"
-of our module. However, we ran into some troubles using these, while without 
-them, everything seemed just fine. So, we abandoned it. However, you can add it
-if you #define USE_MODULE_GET_PUT. That is, you can - before compilation - 
-decide, whether you want to use it or not.
-
-Rootkit Programming - Exercise 1
-
-Note that generateSysmap.sh relies on grep and sed to transform system.map 
-into a C header file.
-
-Furthermore, for some reason Virtualbox sometimes can't compile the thing from within a shared folder.
