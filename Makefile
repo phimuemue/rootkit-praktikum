@@ -12,6 +12,7 @@ clean:
 		rm sysmap.h
 		rm sysmap.c
 load:
+		make
 		insmod cool_mod.ko
 unload:
 		rmmod cool_mod.ko
