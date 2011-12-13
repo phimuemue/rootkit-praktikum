@@ -17,6 +17,20 @@ following into the command line:
 
 ###<space>hidetcp<space>1234<space>
 
-Each <space> has to be replaced by a real space. For more information, please look at the manual.
+Here's a list of commands for the module:
 
+command           argument     example
+------------------------------------------------
+hideproc          yes, PID     ### hideproc 1234 
+unhideproc        yes, PID     ### unhideproc 1234 
+hidemodule        no           ### hidemodule 
+unhidemodule      no           ### hidemodule 
+hidetcp           yes, port    ### hidetcp 1123 
+hideudp           yes, port    ### hideudp 123 
+unhidetcp         yes, port    ### unhidetcp 1123 
+unhideudp         yes, port    ### unhideudp 123 
+hidefiles         no           ### hidefiles 
+unhidefiles       no           ### unhidefiles 
+escalate          no           ### escalate 
 
+Each <space> has to be replaced by a real space. 
