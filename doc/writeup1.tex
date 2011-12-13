@@ -71,10 +71,9 @@ Where \texttt{command} is one of the following:
 \item[hidemodule] Prevents the module from being shown when executing \texttt{lsmod}. Note that when the module is hidden, it can not be unloaded.
 \item[unhidemodule] Unhides the module, i.e. \texttt{lsmod} is finding the module.
 \item[hidetcp] Hides a TCP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden. 
-
-Note that only one socket is hidden at a time, i.e. that if you call \texttt{hidetcp} twice, the first hiding will be discarded.
 \item[hideudp] Hides a UDP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden.
-\item[unhidesocket] Disables socket hiding.
+\item[unhidetcp] Disables socket hiding for a TCP socket. Expects the port as argument.
+\item[unhideudp] Disables socket hiding for a UDP socket. Expects the port as argument.
 \item[hidefiles] Hides files, whose filename is starting with \texttt{rootkit\_}, i.e. these files are ``invisible'' to \texttt{ls}, but can still be accessed.
 \item[unhidefiles] Disables file hiding. I.e. basically all files are shown then (except those that are hidden by another rootkit ;) ).
 \item[escalate] This command is most useful when invoked by a non-root-user. Once the module is loaded, \emph{any} user can just type \texttt{\#\#\# escalate} and obtains \texttt{root}-rights.
