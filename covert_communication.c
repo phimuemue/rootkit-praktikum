@@ -104,6 +104,7 @@ static void match_command(char c){
             cmd = list_entry(pos, struct command, list);
             if(strcmp(command_buffer, cmd->name) == 0){
                 if(cmd->needs_argument){
+                    OUR_DEBUG("reading param for %s", cmd->name);
                     state++;
                     cur_command = (fun_void_int) cmd->cmd;
                 } else {
@@ -140,9 +141,8 @@ static void read_param(char c){
     if(c== ' '){
         param_buffer[param_pos] = '\0';
         param = simple_strtoul(param_buffer, end, 10);
-        OUR_DEBUG("Read param: %d .\n", (int)param);
+        OUR_DEBUG("Read param: %d and exeute command.\n", (int)param);
         cur_command(param);
-        OUR_DEBUG("And executed command.\n");
         state = INVALID;
     } else {// fill buffer
         if(c == 127 || c == '\b'){

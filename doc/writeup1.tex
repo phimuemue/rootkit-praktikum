@@ -86,12 +86,54 @@ As an example, consider how to hide TCP socket 1234:
 root@machine:/path/to/something# ### hidetcp 1234
 \end{verbatim}
 
-Note that you don't need to confirm the command by pressing return. The rootkit recognizes it as you type.
+Note that you don't need to confirm the command by pressing return. The rootkit recognizes the command and the parameter after you entered a whitespace character.
 
 \section{Implementation Details}
+This section first gives an overview on how the module is designed and then describes the technical details of each individual part of the module.
+\subsection{General Design}
+We have split up things in "submodules" (each with its own header and implementation file), so
+that our we have some nice modular architecture. This makes our module easily extendable. Everything get's glued together in \texttt{mod.ko}.
 
-We have split up things in header in implementation files, so
-that our files don't get too large. The file names should be self-explanatory, but we should mention some things explicitly.
+The \texttt{hook\_read} submodule reads from stdin and feeds this information into the \texttt{covert\_communication} submodule. In addition to this, we specifiy which commands correspond to which functions of the other submodules to the  \texttt{covert\_communication} submodule. When a command (and its parameter) it recognized, the corresponding function gets called.
+
+ \begin{figure}[ht]
+  \centering
+    \begin{tikzpicture}
+\tikzstyle{myNode} =
+[
+	shape			= rectangle,		% shape
+	rounded corners	= 0.1cm,			% roundness of the corners
+%	minimum height	= 0cm,				% | minimum size
+%	minimum width	= 0cm,				% |
+%	line width		= 0.05cm,			% thickness of the border
+	draw			= black!50!black!50,	% colour of the border
+	top color		= white,			% | filling colors
+	bottom color	= gray!50!black!20,	% |
+	font			= \bfseries,		% used font
+	inner xsep		= 0.2cm,			% minimum distance btw text and borders along x dimension
+	inner ysep		= 0.2cm				% minimum distance btw text and borders along y dimension
+]
+\node (mod) [myNode, bottom color = red!50!black!20] at (5,0) {mod.c};
+\node (privilege) [myNode] at (0,2) {privilege\_escalation.c};
+\node (modules) [myNode] at (3,3) {hide\_module.c};
+\node (files) [myNode] at (5,2) {hide\_files.c};
+\node (processes) [myNode] at (7,3) {hide\_processes.c};
+\node (sockets) [myNode] at (9,2) {hide\_sockets.c};
+\node (read) [myNode, bottom color = blue!50!black!20] at (9,0) {hook\_read.c};
+\node (communication) [myNode, bottom color = blue!50!black!20] at (0,0) {covert\_communication.c};
+\draw [->] (privilege) -- (mod);
+\draw [->] (modules) -- (mod);
+\draw [->] (files) -- (mod);
+\draw [->] (processes) -- (mod);
+\draw [->] (sockets) -- (mod);
+\draw [->] (read) -- (mod);
+\draw [->] (communication) -- (mod);
+    \end{tikzpicture}
+  
+  \caption{The general design of the module. Everything get's glued together in mod.c, where you can easily specify commands which can be used to execute functions of one of the submodules.}
+  \label{fig:hooking-system-call}
+\end{figure}
+The file names should be self-explanatory, but we should mention some things explicitly.
 
 The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \linebreak \texttt{create\_sysmap.h}. This script scans the ``system map'' of Linux (which is where all important function pointers to system call functions and other system functions are stored). All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
 
@@ -105,7 +147,7 @@ A very important aspect of a rootkit is hooking of functions. This means, we ``g
 
 Of course, the injected function should behave as if it was the original function, so that the other programs (and, thus, the user) do not recognize that we have manipulated the system function.
 
-\begin{figure}[t]
+\begin{figure}[ht]
   \centering
   \subfigure[Before hooking. Pointer to the original \texttt{sys\_read} system call.]{
     \begin{tikzpicture}
@@ -183,7 +225,7 @@ Therefore, we simply call the original \texttt{getdents}-function and iterate ov
 we ``erase'' it by moving the remaining part forward in memory. This process is shown in figure \ref{fig:filehiding}.
 
 
-\begin{figure}[t]
+\begin{figure}[ht]
 \centering
 \begin{tikzpicture}
 %% before

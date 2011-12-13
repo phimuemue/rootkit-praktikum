@@ -11,8 +11,7 @@ clean:
 		make -C /lib/modules/$(shell uname -r)/build M=$(PWD) clean
 		rm sysmap.h
 		rm sysmap.c
-load:
-		make
+load: all
 		insmod cool_mod.ko
 unload:
 		rmmod cool_mod.ko

