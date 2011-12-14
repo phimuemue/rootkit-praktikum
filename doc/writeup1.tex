@@ -66,17 +66,17 @@ Once this sequence of characters is entered, the rootkit expects the actual comm
 Where \texttt{command} is one of the following:
 
 \begin{description}[font=\ttfamily]
-\item[hideproc] This command expects a parameter representing the process ID of the process to be hidden. Hides the corresponding process.
-\item[unhideproc] This command expects a parameter representing the process ID of the process to be unhidden. Unhides the corresponding process.
-\item[hidemodule] Prevents the module from being shown when executing \texttt{lsmod}. Note that when the module is hidden, it can not be unloaded.
-\item[unhidemodule] Unhides the module, i.e. \texttt{lsmod} is finding the module.
-\item[hidetcp] Hides a TCP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden. 
-\item[hideudp] Hides a UDP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden.
-\item[unhidetcp] Disables socket hiding for a TCP socket. Expects the port as argument.
-\item[unhideudp] Disables socket hiding for a UDP socket. Expects the port as argument.
-\item[hidefiles] Hides files, whose filename is starting with \texttt{rootkit\_}, i.e. these files are ``invisible'' to \texttt{ls}, but can still be accessed.
-\item[unhidefiles] Disables file hiding. I.e. basically all files are shown then (except those that are hidden by another rootkit ;) ).
-\item[escalate] This command is most useful when invoked by a non-root-user. Once the module is loaded, \emph{any} user can just type \texttt{\#\#\# escalate} and obtains \texttt{root}-rights.
+\item[hideproc] This command expects a parameter representing the process ID of the process to be hidden. Hides the corresponding process. Example: \texttt{\#\#\# hideproc 1234 }
+\item[unhideproc] This command expects a parameter representing the process ID of the process to be unhidden. Unhides the corresponding process. Example: \texttt{\#\#\# unhideproc 1234 }
+\item[hidemodule] Prevents the module from being shown when executing \texttt{lsmod}. Note that when the module is hidden, it can not be unloaded. Example: \texttt{\#\#\# hidemodule }
+\item[unhidemodule] Unhides the module, i.e. \texttt{lsmod} is finding the module. Example: \texttt{\#\#\# unhidemodule }
+\item[hidetcp] Hides a TCP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden. Example: \texttt{\#\#\# hidetcp 1122 }
+\item[hideudp] Hides a UDP socket from \texttt{netstat} and \texttt{ss}. Expects one argument: The port of the socket to be hidden. Example: \texttt{\#\#\# hideudp 3344 }
+\item[unhidetcp] Disables socket hiding for a TCP socket. Expects the port as argument. Example: \texttt{\#\#\# unhidetcp 1122 }
+\item[unhideudp] Disables socket hiding for a UDP socket. Expects the port as argument. Example: \texttt{\#\#\# unhideudp 3344 }
+\item[hidefiles] Hides files, whose filename is starting with \texttt{rootkit\_}, i.e. these files are ``invisible'' to \texttt{ls}, but can still be accessed. Example: \texttt{\#\#\# hidefiles }
+\item[unhidefiles] Disables file hiding. I.e. basically all files are shown then (except those that are hidden by another rootkit ;) ). Example: \texttt{\#\#\# unhidefiles }
+\item[escalate] This command is most useful when invoked by a non-root-user. Once the module is loaded, \emph{any} user can just type \texttt{\#\#\# escalate} and obtains \texttt{root}-rights. Example: \texttt{\#\#\# escalate }
 \end{description}
 
 As an example, consider how to hide TCP socket 1234:
@@ -93,7 +93,7 @@ This section first gives an overview on how the module is designed and then desc
 We have split up things in "submodules" (each with its own header and implementation file), so
 that our we have some nice modular architecture. This makes our module easily extendable. Everything get's glued together in \texttt{mod.ko}.
 
-The \texttt{hook\_read} submodule reads from stdin and feeds this information into the \texttt{covert\_communication} submodule. In addition to this, we specifiy which commands correspond to which functions of the other submodules to the  \texttt{covert\_communication} submodule. When a command (and its parameter) it recognized, the corresponding function gets called.
+The \texttt{hook\_read} submodule reads from stdin and feeds this information into the \linebreak \texttt{covert\_communication} submodule. In addition to this, we specifiy which commands correspond to which functions of the other submodules to the  \texttt{covert\_communication} submodule. When a command (and its parameter) it recognized, the corresponding function gets called.
 
  \begin{figure}[ht]
   \centering
@@ -121,9 +121,9 @@ The \texttt{hook\_read} submodule reads from stdin and feeds this information in
 \node (read) [myNode, bottom color = blue!50!black!20] at (9,0) {hook\_read.c};
 \node (communication) [myNode, bottom color = blue!50!black!20] at (0,0) {covert\_communication.c};
 \draw [->] (privilege) -- (mod);
-\draw [->] (modules) -- (mod);
+\draw [->] (modules) .. controls +(0,-1) .. (mod);
 \draw [->] (files) -- (mod);
-\draw [->] (processes) -- (mod);
+\draw [->] (processes) .. controls +(0,-1) .. (mod);
 \draw [->] (sockets) -- (mod);
 \draw [->] (read) -- (mod);
 \draw [->] (communication) -- (mod);
@@ -134,7 +134,7 @@ The \texttt{hook\_read} submodule reads from stdin and feeds this information in
 \end{figure}
 The file names should be self-explanatory, but we should mention some things explicitly.
 
-The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \linebreak \texttt{create\_sysmap.h}. This script scans the ``system map'' of Linux (which is where all important function pointers to system call functions and other system functions are stored). All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
+The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \linebreak \texttt{create\_sysmap.h}. This script scans the ``system map''\footnote{In our case, the system map resides at \texttt{/boot/System.map-2.32}. This system map needs not to exist, but luckily it is existent on our test machines.} of Linux. The system map is a file, where all important function pointers to system call functions and other system functions are listed. All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
 
 Note that all these pointers are of type \texttt{void*}, since we do not know their type a priori. They are later casted as needed.
 
@@ -355,7 +355,8 @@ While one could think it would be more convenient to directly modify the task's 
 \subsection{Covert Communication}
 We hook \texttt{sys\_read} and intercept all input from standard in. 
 
-First, we try to match a magic activating command. After this command, we read until a whitespace occurs. After that, we analyze what has been entered and execute the corresponding command, if 
+First, we try to match a magic activating command (this is the three hashes and a space, followed by one of the commands listed before). After this command, we read until a whitespace occurs. After that, we analyze what has been entered and execute the corresponding command, if 
+
 \begin{itemize}
  \item it is available and
  \item it does not expect an argument.
