@@ -5,6 +5,6 @@
 # and create the corresponding entry which is writen to sysmpa.h
 
 awk -- '($2 ~ /[TtDdRr]/) && (schonda[$3] != 1) && ($3 !~ /\./) {
-	print "void* ptr_"$3" = (void*) 0x"$1"; // "$0
+	print "/* "$1" */ void* ptr_"$3" = (void*) 0x"$1"; // "$0
 	schonda[$3] = 1
-}' /boot/System.map-$(uname -r) > sysmap.h
+}' /boot/System.map-$(uname -r) | sort > sysmap.h

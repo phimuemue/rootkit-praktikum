@@ -66,21 +66,20 @@ unsigned sys_call_off;
 //     printk(KERN_INFO "I think I found the system call table at %p (zum Vergleich der pointer aus sysmap.h: %p).\n", sys_call_table, ptr_sys_call_table);
 // }
 
-unsigned long **find_sys_call_table(void)  {
-  unsigned long **sctable;
-  unsigned long ptr;
+unsigned long **find_sys_call_table_r(void)  {
 
-  sctable = NULL;
-  for (	ptr = (unsigned long)&lock_kernel;
-	ptr < (unsigned long)&loops_per_jiffy;
-	ptr += sizeof(void *)) {
-    unsigned long *p;
-    p = (unsigned long *)ptr;
-    if (p[__NR_close] == (unsigned long) sys_close) {
-      sctable = (unsigned long **)p;
-      printk(KERN_INFO "I think I found the system call table at %p (zum Vergleich der pointer aus sysmap.h: %p).\n", sctable, ptr_sys_call_table);
-      return &sctable[0];
-    }
+  void** sys_call_table = (void *) ptr_sys_call_table;
+
+  sys_call_table = (void *)(&lock_kernel);
+  while((void*)sys_call_table < (void*)(&loops_per_jiffy)) {
+      if (sys_call_table[__NR_close] == sys_close){
+          printk(KERN_ALERT "found syscalltable: %p", (void*)sys_call_table);
+          return (unsigned long **)sys_call_table;
+      } else {
+          printk(KERN_INFO "skipping: %p", (void*)sys_call_table);
+
+      }
+      sys_call_table = (void *)((char*)sys_call_table)+2;
   }
   return NULL;
 }
@@ -130,6 +129,26 @@ void unhook_function(void){
   sys_call_table[__NR_read] = (void*) original_read;
   make_page_readonly((long unsigned int) ptr_sys_call_table);
 }
+
+unsigned long **find_sys_call_table(void)  {
+  unsigned long **sctable;
+  unsigned long ptr;
+
+  sctable = NULL;
+  for (	ptr = (unsigned long)&lock_kernel;
+    ptr < (unsigned long)&loops_per_jiffy;
+    ptr += sizeof(void *)) {
+    unsigned long *p;
+    p = (unsigned long *)ptr;
+    if (p[__NR_close] == (unsigned long) sys_close) {
+      sctable = (unsigned long **)p;
+      printk(KERN_INFO "I think I found the system call table at %p (zum Vergleich der pointer aus sysmap.h: %p).\n", sctable, ptr_sys_call_table);
+      return &sctable[0];
+    }
+  }
+  return NULL;
+}
+
 /* Print the number of running processes */
 int print_nr_procs(void){
     fun_int_void npf; // function pointer to function counting processes
@@ -137,6 +156,8 @@ int print_nr_procs(void){
     npf = (fun_int_void) ptr_nr_processes;
     res = npf();
     printk(KERN_INFO "%d processes running", res);
+
+    find_sys_call_table();
     return 0;
 }
 
@@ -146,7 +167,7 @@ static int __init _init_module(void)
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     print_nr_procs();
     hook_function();
-    find_sys_call_table();
+    find_sys_call_table_r();
     return 0;
 }
 
