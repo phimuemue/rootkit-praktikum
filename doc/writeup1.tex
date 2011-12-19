@@ -9,7 +9,7 @@
 \usepackage[loose]{subfigure}
 \usepackage[pdfborder={0 0 0}]{hyperref}
 
-\newcommand{\todo}[1]{\textcolor{red}{TODO: #1}}
+\newcommand{\todo}[1]{}%{\textcolor{red}{TODO: #1}}
 
 \geometry{margin=3.5cm}
 
@@ -211,7 +211,7 @@ void hook_read(fun_void_charp_int cb){
 }
 \end{verbatim}
 
-Let us consider this function line by line. First, we locate the system call table, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \texttt{asmlinkage ssize\_t (*)(unsigned int, char \_\_user *, size\_t)}. This is a pointer to a function returning a value of type \texttt{size\_t} and taking three arguments, just like the original \texttt{read} system call declared in \texttt{linux/syscalls.h} in the Linux kernel.}. This is necessary for several reasons: First, we want to be able to restore the original call if we want to unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand.
+Let us consider this function line by line. First, we locate the system call table, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \texttt{asmlinkage ssize\_t (*)(unsigned int, char \_\_user *, size\_t)}. This is a pointer to a function returning a value of type \texttt{size\_t} and taking three arguments, just like the original \texttt{read} system call declared in \href{http://lxr.linux.no/linux+v2.6.32/arch/x86/include/asm/syscalls.h}{\texttt{linux/syscalls.h}} in the Linux kernel.}. This is necessary for several reasons: First, we want to be able to restore the original call if we want to unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand.
 
 Let us -- for now -- skip the next line and directly consider the following line from the above snippet:
 
@@ -235,7 +235,7 @@ void make_page_writable(long unsigned int _addr){
 }
 \end{verbatim}
 
-That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}). \todo{Is this correct, what I'm writing here?}
+That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}, wich is a macro defined in the linux kernel). \todo{Is this correct, what I'm writing here?}
 
 Hooking functions is basically done in this way. Note that the functions we want to hook need not necessarily reside in the system call table, but can be at other locations as well. The mechanism of hooking, however, is equivalent.
 
