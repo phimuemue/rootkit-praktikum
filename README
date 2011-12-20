@@ -1,26 +1,20 @@
+Rootkit Programming - Exercise 8
 
-Rootkit Programming - Exercise 2
-
-You should have recieved the following files (in the archive ex1.tar):
+You should have recieved the following files (in the archive ex8.tar):
  * README
- * generateSysmap.sh
  * Makefile
- * hello-1.c
+ * mod.c
 
 We hook sys_read by changing the function pointer in the system call table
 to a function hooked_read accepting the same parameters as the original
-read function. hooked_read prints out all parameters and the result of the 
-original read call.
+read function.
+
+We find the system table in memory by traversing a certain memory section.
+We start at &lock_kernel (which is in memory before the system call table)
+and go (in steps of 2 bytes) until we find a memory location p where 
+p[__NR_close]==sys_close. This memory location is guessed to be the address 
+of the system call table.
 
 We considered using try_module_get and put_module to avoid "unallowed unloading"
 of our module. However, we ran into some troubles using these, while without 
-them, everything seemed just fine. So, we abandoned it. However, you can add it
-if you #define USE_MODULE_GET_PUT. That is, you can - before compilation - 
-decide, whether you want to use it or not.
-
-Rootkit Programming - Exercise 1
-
-Note that generateSysmap.sh relies on grep and sed to transform system.map 
-into a C header file.
-
-Furthermore, for some reason Virtualbox sometimes can't compile the thing from within a shared folder.
+them, everything seemed just fine. So, we abandoned it.
