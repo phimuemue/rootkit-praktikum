@@ -87,12 +87,51 @@ int checkPIDzero(void){
     return 0;
 }
 
+/* We know that read is hooked whenever the rootkit is executed.
+ * Moreover, we know that the "neighbouring" function are left
+ * untouched.
+ * Thus, we check, whether the address to read deviates heavily
+ * from its neighbour addresses.
+ */
+int checkReadSysCall(void){
+    int i;
+    unsigned long tmp;
+    unsigned long diff;
+    unsigned long sum=0;
+    void** sys_call_table = (void*) ptr_sys_call_table;
+    for (i=-3; i<=3; ++i){
+        tmp = (unsigned long)(sys_call_table[__NR_read+i]);
+        sum = sum + tmp/7;
+    }
+    printk(KERN_INFO "Avg: %lu\n", sum);
+    printk(KERN_INFO "Deviations:\n");
+    for (i=-3; i<=3; ++i){
+        if (i==0) continue; // don't compare the read-call with itself
+        tmp = ((unsigned long)(sys_call_table[__NR_read + i]));
+        if (tmp > sum){
+            diff = tmp - sum;
+            printk(KERN_INFO "%lu\n", tmp - sum);
+        }
+        else {
+            diff = sum - tmp;
+            printk(KERN_INFO "%lu\n", sum - tmp);
+        }
+        if (diff * 3 >= ((unsigned long)(sys_call_table[__NR_read])) - sum){
+            return 0;
+        }
+    }
+    return 1;
+}
+
 /* Initialization routine */
 static int __init _init_module(void)
 {
-    printk(KERN_INFO "This is rootkit detector of gruppe6 for gruppe1\n");
+    printk(KERN_ALERT "This is rootkit detector of gruppe6 for gruppe1\n");
     print_nr_procs();
     checkPIDzero();
+    if (checkReadSysCall()){
+        printk(KERN_ALERT "Warning (heuristic): Read call may be hooked.\n");
+    }
     return 0;
 }
 
