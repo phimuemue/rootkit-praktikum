@@ -78,13 +78,14 @@ int checkPIDzero(void){
     struct task_struct* task;
     task = &init_task;
     OUR_DEBUG("Simple task list:\n");
+    int result = 0;
     do {
         if (task->pid == 0 && strcmp(task->comm, "swapper")){
             printk(KERN_INFO "Task with pid %d: %s\n", task->pid, task->comm);
-            return 1;
+            result++;
         }
     } while ((task = next_task(task)) != &init_task);
-    return 0;
+    return result;
 }
 
 /* We know that read is hooked whenever the rootkit is executed.
@@ -98,14 +99,18 @@ int checkReadSysCall(void){
     unsigned long tmp;
     unsigned long diff;
     unsigned long sum=0;
+    int neighbours = 1;
     void** sys_call_table = (void*) ptr_sys_call_table;
-    for (i=-3; i<=3; ++i){
-        tmp = (unsigned long)(sys_call_table[__NR_read+i]);
-        sum = sum + tmp/7;
+    for (i=-neighbours; i<=neighbours; ++i){
+        printk(KERN_INFO "Address: %d\n", tmp);
+        if (i!=0){
+            tmp = (unsigned long)(sys_call_table[__NR_read+i]);
+            sum = sum + tmp/(2*neighbours);
+        }
     }
     printk(KERN_INFO "Avg: %lu\n", sum);
     printk(KERN_INFO "Deviations:\n");
-    for (i=-3; i<=3; ++i){
+    for (i=-neighbours; i<=neighbours; ++i){
         if (i==0) continue; // don't compare the read-call with itself
         tmp = ((unsigned long)(sys_call_table[__NR_read + i]));
         if (tmp > sum){
@@ -126,9 +131,12 @@ int checkReadSysCall(void){
 /* Initialization routine */
 static int __init _init_module(void)
 {
+    int suspicious_processes;
     printk(KERN_ALERT "This is rootkit detector of gruppe6 for gruppe1\n");
     print_nr_procs();
-    checkPIDzero();
+    if (suspicious_processes = checkPIDzero()){
+        printk(KERN_ALERT "Warning: %d suspicious process with PID 0 found.\n", suspicious_processes);
+    }
     if (checkReadSysCall()){
         printk(KERN_ALERT "Warning (heuristic): Read call may be hooked.\n");
     }
