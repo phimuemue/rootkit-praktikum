@@ -1,6 +1,10 @@
 #include <linux/module.h>    /* Needed by all modules */
 #include <linux/kernel.h>    /* Needed for KERN_INFO */
 #include <linux/init.h>      /* Custom named entry/exit function */
+#include <net/tcp.h>
+#include <net/udp.h>
+#include <net/inet_sock.h>
+#include <linux/socket.h>
 #include <linux/unistd.h>    /* Original read-call */
 #include <asm/cacheflush.h>  /* Needed for set_memory_ro, ...*/
 #include <asm/pgtable_types.h>
@@ -9,6 +13,7 @@
 #include <linux/dirent.h>
 #include <linux/sched.h>
 #include <asm/uaccess.h>
+#include <linux/syscalls.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
 
@@ -45,6 +50,13 @@ struct linux_dirent {
                           offsetof(struct linux_dirent, d_name) */
 };
 
+typedef asmlinkage long (*fun_long_int_int_int)(int, int, int);
+fun_long_int_int_int our_sys_socket;
+//extern asmlinkage long (*our_sys_socket)(int, int, int);
+
+// we ourselves hook the (possibly already hooked) socketcall
+typedef asmlinkage long (*fun_long_int_unsigned_long)(int, unsigned long __user*);
+fun_long_int_unsigned_long orig_socketcall;
 
 // for convenience, I'm using the following notations for fun pointers:
 // fun_<return type>_<arg1>_<arg2>_<arg3>_...
@@ -76,9 +88,9 @@ int print_nr_procs(void){
  * suspects the rootkit running), 0 otherwise */
 int checkPIDzero(void){
     struct task_struct* task;
+    int result = 0;
     task = &init_task;
     OUR_DEBUG("Simple task list:\n");
-    int result = 0;
     do {
         if (task->pid == 0 && strcmp(task->comm, "swapper")){
             printk(KERN_INFO "Task with pid %d: %s\n", task->pid, task->comm);
@@ -96,13 +108,13 @@ int checkPIDzero(void){
  */
 int checkReadSysCall(void){
     int i;
-    unsigned long tmp;
+    unsigned long tmp = 0;
     unsigned long diff;
     unsigned long sum=0;
     int neighbours = 1;
     void** sys_call_table = (void*) ptr_sys_call_table;
     for (i=-neighbours; i<=neighbours; ++i){
-        printk(KERN_INFO "Address: %d\n", tmp);
+        printk(KERN_INFO "Address: %lu\n", tmp);
         if (i!=0){
             tmp = (unsigned long)(sys_call_table[__NR_read+i]);
             sum = sum + tmp/(2*neighbours);
@@ -128,13 +140,48 @@ int checkReadSysCall(void){
     return 1;
 }
 
+/* Make a certain address writeable */
+void make_page_writable(long unsigned int _addr){
+    unsigned int dummy;
+    pte_t *pageTableEntry = lookup_address(_addr, &dummy);
+
+    pageTableEntry->pte |=  _PAGE_RW;
+}
+
+/* Make a certain address readonly */
+void make_page_readonly(long unsigned int _addr){
+    unsigned int dummy;
+    pte_t *pageTableEntry = lookup_address(_addr, &dummy);
+    pageTableEntry->pte = pageTableEntry->pte & ~_PAGE_RW;
+}
+
+asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
+    // when a socket gets opened with exaclty the arguments which ss uses, return -1
+    // returning -1 causes ss to try it via /proc/net, which we already hooked
+    printk(KERN_INFO "[Rootkit-Detector] socketcall\n");
+    if(call == SYS_SOCKET && args[0] == AF_NETLINK && args[1] == SOCK_RAW && args[2] == NETLINK_INET_DIAG)
+        return our_sys_socket(args[0], args[1], args[2]);
+    return orig_socketcall(call, args);
+}
+
 /* Initialization routine */
 static int __init _init_module(void)
 {
     int suspicious_processes;
+    void** sys_call_table = (void*) ptr_sys_call_table;
+    // "preprocessing" stuff
     printk(KERN_ALERT "This is rootkit detector of gruppe6 for gruppe1\n");
+    printk(KERN_ALERT "Hooking socketcall.\n");
+    orig_socketcall = (fun_long_int_unsigned_long)
+                        sys_call_table[__NR_socketcall];
+    make_page_writable((long unsigned int)sys_call_table);    
+    sys_call_table[__NR_socketcall] = hooked_socketcall;
+    make_page_readonly((long unsigned int)sys_call_table);    
+    printk(KERN_ALERT "hooked socketcall.\n");
     print_nr_procs();
-    if (suspicious_processes = checkPIDzero()){
+    our_sys_socket = ptr_sys_socket;
+    // now the actual checks
+    if ((suspicious_processes = checkPIDzero())){
         printk(KERN_ALERT "Warning: %d suspicious process with PID 0 found.\n", suspicious_processes);
     }
     if (checkReadSysCall()){
@@ -146,7 +193,11 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
+    void** sys_call_table = (void*) ptr_sys_call_table;
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
+    make_page_writable((long unsigned int)sys_call_table);    
+    sys_call_table[__NR_socketcall] = orig_socketcall;
+    make_page_readonly((long unsigned int)sys_call_table);    
 }
 
 /* Declare init and exit routines */
