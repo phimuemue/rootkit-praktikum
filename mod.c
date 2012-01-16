@@ -164,6 +164,15 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
     return orig_socketcall(call, args);
 }
 
+int checkTCP(void){
+    long args[] = {AF_NETLINK, SOCK_RAW, NETLINK_INET_DIAG, 0,0,0};
+    if (our_sys_socket(AF_NETLINK, SOCK_RAW, NETLINK_INET_DIAG) !=
+            orig_socketcall(SYS_SOCKET, args)){
+        return 1;
+    }
+    return 0;
+}
+
 /* Initialization routine */
 static int __init _init_module(void)
 {
@@ -187,6 +196,9 @@ static int __init _init_module(void)
     if (checkReadSysCall()){
         printk(KERN_ALERT "Warning (heuristic): Read call may be hooked.\n");
     }
+//    if (checkTCP()){
+//        printk(KERN_ALERT "Warning: TCP socket may be hidden.\n");
+//    }
     return 0;
 }
 
