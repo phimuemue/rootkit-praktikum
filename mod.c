@@ -173,6 +173,52 @@ int checkTCP(void){
     return 0;
 }
 
+
+/**
+  * Prints first 10 bytes of read syscall
+  *
+  * just for developing
+  */
+void printREADFUNCTION(void){
+    void** sys_call_table = (void*) ptr_sys_call_table;
+    unsigned char byte;
+    int i;
+    char* contentsOfRead;
+
+    printk(KERN_ALERT "-------------------------------.\n");
+    printk(KERN_ALERT "-- mem dump of original read --.\n");
+    printk(KERN_ALERT "-------------------------------.\n");
+
+    contentsOfRead = (char*) sys_call_table[__NR_read];
+
+    for(i = 0; i<10;i++){
+        byte = contentsOfRead[i];
+        printk(KERN_ALERT "byte %d: 0x%X\n", i, byte);
+
+    }
+
+    printk(KERN_ALERT "-------------------------------.\n");
+    printk(KERN_ALERT "------- end of mem dump -------.\n");
+    printk(KERN_ALERT "-------------------------------.\n");
+}
+
+int checkReadSysCallBytes(void){
+    void** sys_call_table = (void*) ptr_sys_call_table;
+    unsigned char referenceBytes[3];
+    unsigned char* contentsOfRead;
+
+    referenceBytes[0] = (unsigned char) 0x56;
+    referenceBytes[1] = (unsigned char) 0xBE;
+    referenceBytes[2] = (unsigned char) 0xF7;
+
+    contentsOfRead = (char*) sys_call_table[__NR_read];;
+    if(     contentsOfRead[0] == referenceBytes[0] &&
+            contentsOfRead[1] == referenceBytes[1] &&
+            contentsOfRead[2] == referenceBytes[2])
+        return 0;
+    return 1;
+}
+
 /* Initialization routine */
 static int __init _init_module(void)
 {
@@ -196,8 +242,11 @@ static int __init _init_module(void)
     if (checkReadSysCall()){
         printk(KERN_ALERT "Warning (heuristic): Read call may be hooked.\n");
     }
+    if (checkReadSysCallBytes()){
+        printk(KERN_ALERT "Warning: Content of read syscall differs from original content.\n");
+    }
 //    if (checkTCP()){
-//        printk(KERN_ALERT "Warning: TCP socket may be hidden.\n");
+//        printk(KERN_ALERT "Warning: TCP socket is hidden.\n");
 //    }
     return 0;
 }
@@ -207,9 +256,9 @@ static void __exit _cleanup_module(void)
 {
     void** sys_call_table = (void*) ptr_sys_call_table;
     printk(KERN_INFO "Gruppe 6 says goodbye.\n");
-    make_page_writable((long unsigned int)sys_call_table);    
+    make_page_writable((long unsigned int)sys_call_table);
     sys_call_table[__NR_socketcall] = orig_socketcall;
-    make_page_readonly((long unsigned int)sys_call_table);    
+    make_page_readonly((long unsigned int)sys_call_table);
 }
 
 /* Declare init and exit routines */
