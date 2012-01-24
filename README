@@ -12,6 +12,20 @@ Python 2.6.6.
 This compiles the detector module, inserts it, does some checking, parses
 the output, and finally removes the detector module again.
 
+Here's a shortcut how to use the rootkit (or at least the relevant 
+features) of gruppe 1. After inserting, you can do the following:
+
+If you want to hide TCP socket 1234, you'll have to do the 
+following steps:
+
+> rk_com:3
+> rk_com:6 1234!
+
+If you want to hide process with pid 567, you'll have to do the following:
+
+> rk_com:1
+> rk_com:5 567!
+
 A remark: When you run the python detector, you'll see some lines. Note 
 that these lines do come from different sources: Some of them are pure
 Python output (written to stdout), whereas others come directly from the
