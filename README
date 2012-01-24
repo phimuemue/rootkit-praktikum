@@ -32,7 +32,8 @@ The detector detects the following:
   sys_read. 
   Moreover, we have a *heuristic* check that is based on the address in
   the system call table. Note that this heuristic check may not be one
-  hundret percent accurate (it is only a heuristic, as said).
+  hundret percent accurate (it is only a heuristic, as said). This is more
+  of an optional feature.
 * We check if there are hidden processes. This can be done quite easily,
   since process hiding is implemented by setting the process ID to 0. 
   Thus, we can simply look for a process with PID 0.
