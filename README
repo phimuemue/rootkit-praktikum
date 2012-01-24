@@ -23,8 +23,10 @@ default, but if you do not trust completely what you see when running
 The detector detects the following:
 * We check whether the read-system-call is hooked. This is done by simply
   comparing the first three bytes of the memory location pointed to by
-  sys_read. Moreover, we have a *heuristic* check that is based on the 
-  address in the system call table.
+  sys_read. 
+  Moreover, we have a *heuristic* check that is based on the address in
+  the system call table. Note that this heuristic check may not be one
+  hundret percent accurate (it is only a heuristic, as said).
 * We check if there are hidden processes. This can be done quite easily,
   since process hiding is implemented by setting the process ID to 0. 
   Thus, we can simply look for a process with PID 0.
