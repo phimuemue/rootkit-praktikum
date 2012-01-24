@@ -5,6 +5,7 @@ You should have received the following files:
 * detector.py
 * createSysmap.sh
 * mod.c
+* Makefile
 
 To run the detector, simply type "python detector.py". We tested it using
 Python 2.6.6.
