@@ -20,6 +20,12 @@ both stdout and the KERN_ALERT messages are visible. This should be the
 default, but if you do not trust completely what you see when running 
 "python detector.py", you can have a look at dmesg.
 
+So, if the output seems kinda weird, you can do the following manually:
+> make
+> insmod mod.ko
+> ss -t -a
+> rmmod mod
+
 The detector detects the following:
 * We check whether the read-system-call is hooked. This is done by simply
   comparing the first three bytes of the memory location pointed to by
