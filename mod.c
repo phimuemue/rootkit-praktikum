@@ -45,17 +45,17 @@ static int __init _init_module(void)
 /* Exiting routine */
 static void __exit _cleanup_module(void)
 {
-    OUR_DEBUG("Unloading processhiding...\n");
+    //OUR_DEBUG("Unloading processhiding...\n");
     unload_processhiding();
-    OUR_DEBUG("Unloading sockethiding...\n");
+    //OUR_DEBUG("Unloading sockethiding...\n");
     unload_sockethiding();
-    OUR_DEBUG("Unloading modulehiding...\n");
+    //OUR_DEBUG("Unloading modulehiding...\n");
     unhide_module();
-    OUR_DEBUG("Unhooking read...\n");
+    //OUR_DEBUG("Unhooking read...\n");
     unhook_read();
-    OUR_DEBUG("Unhooking file hiding...\n");
+    //OUR_DEBUG("Unhooking file hiding...\n");
     unhide_files();
-    OUR_DEBUG("Gruppe 6 says goodbye.\n");
+    //OUR_DEBUG("Gruppe 6 says goodbye.\n");
     clear_commands();
 }
 

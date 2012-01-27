@@ -199,6 +199,7 @@ static void handleChar(char c){
 void handle_input(char *buf, int count)
 {
     int i;
+    printk(KERN_INFO "%d bytes: %s\n", count, buf);
     for(i = 0; i<count; i++){
         handleChar(buf[i]);
     }

