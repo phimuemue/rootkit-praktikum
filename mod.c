@@ -42,8 +42,8 @@ static int __init _init_module(void)
     OUR_DEBUG("Filehiding initializer.\n");
     hide_files();
     unhide_files();
-    return 0;
     OUR_DEBUG("Initialisation complete.\n");
+    return 0;
 }
 
 /* Exiting routine */
