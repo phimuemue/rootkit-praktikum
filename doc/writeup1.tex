@@ -163,7 +163,7 @@ The \texttt{hook\_read} submodule reads from stdin and feeds this information in
 \end{figure}
 The file names should be self-explanatory, but we should mention some things explicitly.
 
-The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \linebreak \texttt{create\_sysmap.h}. This script scans the ``system map''\footnote{In our case, the system map resides at \texttt{/boot/System.map-2.32}. This system map needs not to exist, but luckily it is existent on our test machines.} of Linux. The system map is a file, where all kernel symbols are listed. All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
+The files \texttt{sysmap.h} and \texttt{sysmap.c} are generated automatically by the script \linebreak \texttt{create\_sysmap.sh}. This script scans the ``system map''\footnote{In our case, the system map resides at \texttt{/boot/System.map-2.32}. This system map needs not to exist, but luckily it is existent on our test machines.} of Linux. The system map is a file, where all kernel symbols are listed. All these pointers are collected and made usable to our code. The script prepends each found pointer with the prefix \texttt{ptr\_}. So, if you encounter a variable starting with this prefix, chances are good that it is something from the system map.
 
 Note that all these pointers are of type \texttt{void*}, since we do not know their type a priori. They are later casted as needed.
 
@@ -244,6 +244,8 @@ void make_page_writable(long unsigned int _addr){
 That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}, wich is a macro defined in the linux kernel). \todo{Is this correct, what I'm writing here?}
 
 Hooking functions is basically done in this way. Note that the functions we want to hook need not necessarily reside in the system call table, but can be at other locations as well. The mechanism of hooking, however, is equivalent.
+
+However, as we will see later, there are other techniques to hook a system call (see \autoref{sec:hooking-read-2}).
 
 \subsection{File Hiding}
 \label{filehiding}
