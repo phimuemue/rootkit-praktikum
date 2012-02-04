@@ -339,6 +339,8 @@ The function does essentially the following: It traverses the list, where we sto
 Another way to hide processes is to remove the respective task from the hash table which is used for looking up the tasks and generating the entries in proc.
 
 \subsection{Module Hiding}
+\label{sec:module_hiding}
+
 To hide the module, we 
 \begin{itemize}
  \item remove it from the list of modules and
@@ -353,7 +355,7 @@ list_del(&(THIS_MODULE->list));
 
 This line relies on some macros defined in the Linux kernel sources: \texttt{list\_del} removes an item from a linked list and \texttt{THIS\_MODULE} is a pointer to a \texttt{struct module} representing the module it is invoked from. So, the line removes \emph{our} module from the list of modules.
 
-To remove the module from \texttt{/sys/modules}, you have to hook also create a \texttt{filldir}-function which gets called by the hooked readdir operation (for the \texttt{sys}-filesystem this time) and returns 0 when called with this module as parameter. This mechanism is similar to the one described in \autoref{sec:process-hiding}.
+To remove the module from \texttt{/sys/module}, you have to hook also create a \texttt{filldir}-function which gets called by the hooked readdir operation (for the \texttt{sys}-filesystem this time) and returns 0 when called with this module as parameter. This mechanism is similar to the one described in \autoref{sec:process-hiding}.
 
 
 In order to be able to unload the module again, we have to make is visible, otherwise \texttt{rmmod} tells us that such a module is not loaded. So, to make it visible again, we have to insert it again into the list of modules. Fortunatly, our \texttt{sysmap.h} has an entry \texttt{ptr\_modules} which points exactly to the desired list. By calling 
@@ -407,7 +409,7 @@ If it does expect an argument (this is always a number), we read again until a w
 We received a rootkit detector for our rootkit that detects three aspects of our rootkit. This section gives an overview about how detection works.
 
 \begin{description}
-\item[Hooked Read Function] As mentioned in \autoref{fig:hooking-system-call}, we hook \texttt{sys\_read} by changing the function pointer in the system call table. This, however, leaves suspicious traces, since a detector can simply extract the original adress from the \texttt{system.map} file. This is exactly what the detector of gruppe 5 does.
+\item[Hooked Read Function] As mentioned in \autoref{fig:hooking-system-call}, we hook \texttt{sys\_read} by changing the function pointer in the system call table. This, however, leaves suspicious traces, since a detector can simply extract the original adress from the \texttt{system.map} file. This is exactly what the detector of gruppe 5 does. However, for this to work correctly, the detector has to be prepared \textit{before} the rootkit gets loaded. Under the assumption that the rootkit is loaded before the detector (and that the detector cannot do any analysis or preparation thereof in a clean system), the rootkit could simply hook the \texttt{system.map} file such that the values in this file correspond to the actual situation when the rootkit is active.
 
 Subsection \ref{sec:hooking-read-2} describes how we evade this detection.
 \item[Hooked socketcall] In our initial version, we simply hooked the \texttt{sys\_socket} function\footnote{We actually hooked \texttt{socketcall}, because \texttt{sys\_socket} isn't accessible directly, but every call to \texttt{sys\_socket} is handled by the function \texttt{socketcall}.}, and simply checked whether the arguments to this function are the ones given by the program \texttt{ss}. If so, we would simply return -1, so that \texttt{ss} uses its fallback.
@@ -419,6 +421,12 @@ result = socket(AF_NETLINK, SOCK_RAW, NETLINK_INET_DIAG);
 \end{verbatim}
 
 Afterwards, they only have to check whether \texttt{result} is negative. If so, it indicates that our rootkit is present. Subsection \ref{sec:socket-hiding-evasion} describes how we can hide sockets from \texttt{ss} using another technique.
+
+\item[Hidden Module] Two things were done to hide the module (see \autoref{sec:module_hiding}), the detector uses a weakness of the implementation used to remove the entry from the sysfs. Up to now, the rootkit just didn't show the corresponding entry in the \texttt{/sys/module} by overwriting the filldir function and using it in the hooked readdir function. However, the corresponding datastructures of \texttt{sysfs} were still present. What the detector now does is just the following: it iterates over the internal \texttt{sysfs\_dirent}s of the list of modules in the \texttt{sysfs}-datastructures and counts the number of modules in this list. The result is the correct number of currently loaded modules, including our rootkit. Then, it compares this number with the number of lines that a simple 
+\begin{verbatim}
+ls -1 /sys/module/
+\end{verbatim}
+produces, which is the current number - 1, as our module doesn't show up in this list. In \autoref{sec:module-hiding-evasion}, we describe what can be done to avoid detection this way (although you might already have a guess).
 
 \end{description}
 
@@ -630,5 +638,8 @@ if (checkport(h)){  // shall we hide this entry?
     retval = retval - NLMSG_ALIGN((h)->nlmsg_len);
 }
 \end{verbatim}
+
+\subsection{Removing module from sysfs-datastructures}
+\label{sec:module-hiding-evasion}
 
 \end{document}
