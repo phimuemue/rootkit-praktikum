@@ -10,7 +10,7 @@
 \usepackage[loose]{subfigure}
 \usepackage[pdfborder={0 0 0}]{hyperref}
 
-\newcommand{\todo}[1]{}%{\textcolor{red}{TODO: #1}}
+\newcommand{\todo}[1]{\textcolor{red}{TODO: #1}}
 
 \geometry{margin=2.5cm}
 
@@ -23,6 +23,8 @@
 \maketitle
 
 \section{Overview}
+\todo{update this section to reflect the detection and detection evasion part of this writeup and possibly give some general overview of how this whole thing evolved}
+
 
 This rootkit implements several functions, that can -- independently of each other -- be turned on and off. They are outlined here:
 
@@ -426,12 +428,15 @@ Afterwards, they only have to check whether \texttt{result} is negative. If so, 
 \begin{verbatim}
 ls -1 /sys/module/
 \end{verbatim}
-produces, which is the current number - 1, as our module doesn't show up in this list. In \autoref{sec:module-hiding-evasion}, we describe what can be done to avoid detection this way (although you might already have a guess).
+produces, which is the current number of modules - 1, as our module doesn't show up in this list. In \autoref{sec:module-hiding-evasion}, we describe what can be done to avoid detection this way (although you might already have a guess).
 
 \end{description}
 
 \section{Detection Evasion}
 \label{sec:detection-evasion}
+As we really don't want our rootkit be detected by the detector of Gruppe 5, we have some great ideas how to make our rootkit even better so that we finally can achieve world domination. These ideas are described in this section.
+
+Thanks to our modular architecture, the changes could be done separately in the different submodules, such that the old code didn't have to be changed or adapted. This is true even for such fundamental things as the hooked \texttt{sys\_read}, which will be described first.
 
 \subsection{Hooking \texttt{sys\_read} without changing the system call table}
 \label{sec:hooking-read-2}
@@ -439,7 +444,7 @@ produces, which is the current number - 1, as our module doesn't show up in this
 \subsubsection{Installing the hook}
 \label{sec:hooking-read-install-hook}
 
-This subsection describes how we manipulate the \texttt{read} system call without altering the function pointer in the system call table. While in the original version, we simple redirected the call from the system call table directly to our hooked function (as illustrated in \autoref{fig:hooking-system-call}). Now, we do it another way: We directly modify the code of the original read-system call that resides in memory.
+This subsection describes how we manipulate the \texttt{read} system call without altering the function pointer in the system call table. While in the original version, we simple redirected the call from the system call table directly to our hooked function (as illustrated in \autoref{fig:hooking-system-call}), now, we do it another way: We directly modify the code of the original read-system call that resides in memory.
 
 To do so, we inject some custom instructions into the original machine code for the \texttt{read} system call. These injected instructions will cause the machine to jump to \emph{our} hooked function, even if we leave the system call table as it is. This principle is shown in \autoref{fig:read-inlinehook}.
 
@@ -511,7 +516,7 @@ First of all, we recognize that for the Jump-instruction we want to insert, we n
 Furthermore, we have to do two things: We have to remember the original bytes that reside in memory, so that we can restore them when unloading the module. Moreover, we create an auxiliary array that holds the 5 bytes needed for our Jump-instruction to be inserted:
 
 \begin{verbatim}
-static char syscall_code[SYSCALL_CODE_LENGTH];
+static char syscall_code[SYSCALL_CODE_LENGTH]; // the original bytes go here
 static char new_syscall_code[SYSCALL_CODE_LENGTH] = "\xe9\x00\x00\x00\x00"; /* jmp $0 */
 \end{verbatim}
 
@@ -527,9 +532,9 @@ Note that -- up to now -- we would just jump to 0. This is of course not what we
  ((int)hooked_read) - ((int)sys_call_table[__NR_read] + 5);
 \end{verbatim}
 
-This sets the last 4 bytes to the corresponding address. Note that we have to compute the difference between \texttt{hooked\_read} and \texttt{sys\_call\_table[\_\_NR\_read]}, since the jump is relative. We have to add 5, because the jump-instruction itself occupies 5 bytes.
+This sets the last 4 bytes to the corresponding address. Note that we have to compute the difference between \texttt{hooked\_read} and \texttt{sys\_call\_table[\_\_NR\_read]}, since the jump is relative. We have to add 5 (\todo{Philipp: because when the jump occurs the instruction pointer is already 5 bytes after the entry point of the function and the jump is relative to the current instruction pointer address??}), because the jump-instruction itself occupies 5 bytes.
 
-So, it remains to backup the original bytes and install the jump-instruction. Therefore, we wrote a small auxiliary function \texttt{\_memcpy} that behaves (or at least should behave) just like the well-known \texttt{memcpy}. It takes one more parameter to handle write-protected memory sections properly.
+So, it remains to backup the original bytes and install the jump-instruction. Therefore, we wrote a small auxiliary function \texttt{\_memcpy} that behaves (or at least should behave) just like the well-known \texttt{memcpy}. It takes one additional parameter, if this is 1, the function handles write-protected memory sections properly.
 
 \begin{verbatim}
 _memcpy( syscall_code, sys_call_table[__NR_read], sizeof(syscall_code), 0);
@@ -568,6 +573,8 @@ This copies the first 2 instructions into an auxiliary byte array \texttt{trampo
 As said above, \texttt{hooked\_read} somehow needs to call the original system call so that we get the result (and -- of course -- the user doesn't experience any difference when typing in something). However, the system call is currently damaged since we overwrote the first 2 instructions in memory.
 
 But we can do the following: Since we have the first 2 \emph{original} instructions stored in \texttt{trampoline}, we can just ``go there'', do these two instructions, and afterwards jump to the third instruction of the original system call and continue there. This technique is illustrated in \autoref{fig:trampoline-hooked-read}.
+
+\todo{Philipp: bis hier her hab ich alles perfekt verstanden, aber ich würde dann noch kurz sagen, wie es weitergeht und dann vor allem wie der hook wieder entfernt wird. Außerdem (ich weiß, ich bin ganz schön überlästig :)) würde ich in der Zeichnung alle jumps explizit mit reinmachen, weil jetzt ist der weg von hooked\_read zum trampoline und der von da zum sys\_read irgendwie magic.}
 
 \begin{figure}[t]
   \centering
@@ -639,7 +646,20 @@ if (checkport(h)){  // shall we hide this entry?
 }
 \end{verbatim}
 
+\todo{Philipp: auch sehr gut, aber am ende fehlen auch hier noch ein paar abschließende worte :)}
+
 \subsection{Removing module from sysfs-datastructures}
 \label{sec:module-hiding-evasion}
+This part of the detection evasion is probably the most straightforward one. As the detector iterates over the \texttt{sysfs\_dirent}s and counts them, the obvious thing to do is to remove (and when the module should be added again: re-add) the respective \texttt{sysfs\_dirent} from this siblings-list. What makes our live even easier is the fact that there are functions in the \texttt{sysfs}-implementation that do exaclty this: \texttt{sysfs\_unlink\_sibling} and \texttt{sysfs\_link\_sibling}. As these functions are \texttt{static}, we have to copy them (and the necessary \texttt{struct}-definitions) to our module. After that, when hiding the module, we just use the \texttt{sysfs\_unlink\_sibling} function to remove it from the list. 
+
+\textbf{One thing to note:} While removing is done just by adapting the pointers in the list, adding them is a little bit more tricky, as 
+the \texttt{sysfs\_dirent}s are stored ordered by ino (\todo{wtf does this stand for? ino}). If you just insert the \texttt{sysfs\_dirent} at the beginning of the list, this will in most cases lead to unintentional behaviour which may prevent to reload the module.
+
+When the detector now iterates over the internal datastructures to count the modules and our module is loaded and hidden, it won't see any difference compared to the output by \texttt{ls} and therefore cannot detect our module.
+
+\section{Conclusion}
+write something about rootkitprogramming and -detection in general...
+\todo{famous last words go here}
+
 
 \end{document}
