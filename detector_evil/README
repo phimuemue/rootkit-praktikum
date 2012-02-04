@@ -1,0 +1,80 @@
+Rootkit Programming - README for Assignment 9
+
+I. CONTENTS
+	This package provides routines to detect the group 06 rootkit using 3
+	different approaches. Therefore it contains:
+		
+		Create_sysmap.sh
+		detect_rootkit.sh
+		detector_mod_base.c
+		sockethiding_detector.c
+		Makefile
+		README
+
+II. USAGE
+	0. make sure you are root
+	1. run make
+	2. run bash detect_rootkit.sh 
+		-> the script now tells you, if it did detect the group 06 rootkit
+
+III. EXPLANATION OF FUNCTIONALITY (detect_rootkit.sh)
+	
+	0. Initialization
+		A uniqe detector id is generated to ensure the communication with the LKM.
+		Then the script loads the LKM (detector_mod_base) with this generated id
+		as argument.
+	
+		Responses of the LKM to the script are written to /var/log/messages.
+	
+	1. Method : Check if the read-syscall is hooked 
+		involved files : 
+			detector_mod_base.ko (LKM)
+	
+		On loading the rootkit hooks the read system call by modifying the
+		syscall-table This is done in order to get the input for the covert 
+		communication channel. This means that the rootkit can be detected by
+		checking the address of the read system call which is stored in the 
+		system call table.
+		
+		detect_read() simply checks if the entry for the read system call in the 
+		syscall-table and the addresss stored in the System.map file are equal. 
+		In case they are not, it is very likely the rootkit is installed.
+	
+	2. Method : Check for hidden modules
+		involved files : 
+			detector_mod_base.ko (LKM)
+						
+		The script counts all modules that are visible in the sysfs.
+		This number is compared with the number the LKM provides, in case the two numbers are
+		not equal it is highly probable that group 06 rootkit is installed.
+		
+		The LKM provided number is calculated in count_modules() by looping through all
+		modules in the internal data structures of sysfs. As the group 06 rootkit only 
+		removes the module from the module list and masks the sysfs entry by hooking
+		readdir and filldir without actually removing it from the sysfs modules directory,
+		this will lead to the real number of modules. This means that if there are hidden
+		modules the values calculated by the script and the rootkit will differ.
+
+		After this step the LKM (detector_mod_base) is unloaded.
+	
+	3. Method : Check if the netlink socket is blocked
+		involved files :
+			sockethiding_detector (C-program)
+			
+		The gruppe 06 rootkit blocks the creation of netlink sockets by returning -1. This
+		makes ss fall back to the proc filesystem. The result is that sockets which are
+		hidden from the proc file system are also hidden from ss.
+		
+		The sockethiding_detector program checks if -1 is returned on creation of a
+		netlink socket.
+
+		In order to detect the rootkit the detection script first tries to load the 
+		module TCP_DIAG which will also lead to loading INET_DIAG. If these sockets
+		can be loaded successfully the scripts runs the sockethiding_detector and
+		checks if a netlink socket using INET_DIAG can be created. If the rootkit is
+		not running the creation of the socket should succeed as TCP_DIAG and INET_DIAG
+		are loaded.
+.
+		In case both modules are loaded correctly and -1 is returned, it is hiighly
+		probable that the group 06 rootkit is installed.
+	
