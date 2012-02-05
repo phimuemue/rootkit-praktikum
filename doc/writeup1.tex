@@ -532,7 +532,9 @@ Note that -- up to now -- we would just jump to 0. This is of course not what we
  ((int)hooked_read) - ((int)sys_call_table[__NR_read] + 5);
 \end{verbatim}
 
-This sets the last 4 bytes to the corresponding address. Note that we have to compute the difference between \texttt{hooked\_read} and \texttt{sys\_call\_table[\_\_NR\_read]}, since the jump is relative. We have to add 5 (\todo{Philipp: because when the jump occurs the instruction pointer is already 5 bytes after the entry point of the function and the jump is relative to the current instruction pointer address??}), because the jump-instruction itself occupies 5 bytes.
+This sets the last 4 bytes to the corresponding address. Note that we have to compute the difference between \texttt{hooked\_read} and \texttt{sys\_call\_table[\_\_NR\_read]}, since the jump is relative. 
+
+Note that -- as soon as the actual jump occurs -- the instruction pointer is already 5 bytes after the beginning of the jump-instruction (because this jump-instruction occupies 5 byte). This is where the 5 in the code comes from.
 
 So, it remains to backup the original bytes and install the jump-instruction. Therefore, we wrote a small auxiliary function \texttt{\_memcpy} that behaves (or at least should behave) just like the well-known \texttt{memcpy}. It takes one additional parameter, if this is 1, the function handles write-protected memory sections properly.
 
@@ -572,7 +574,34 @@ This copies the first 2 instructions into an auxiliary byte array \texttt{trampo
 
 As said above, \texttt{hooked\_read} somehow needs to call the original system call so that we get the result (and -- of course -- the user doesn't experience any difference when typing in something). However, the system call is currently damaged since we overwrote the first 2 instructions in memory.
 
-But we can do the following: Since we have the first 2 \emph{original} instructions stored in \texttt{trampoline}, we can just ``go there'', do these two instructions, and afterwards jump to the third instruction of the original system call and continue there. This technique is illustrated in \autoref{fig:trampoline-hooked-read}.
+But we can do the following: Since we have the first 2 \emph{original} instructions stored in \texttt{trampoline}, we can just ``go there'', do these two instructions, and afterwards jump to the third instruction of the original system call and continue there. This way, we ``simulate'' the original \texttt{sys\_read} function.
+
+We sum up how hooking the \texttt{sys\_read} function by trampolining works:
+
+\begin{itemize}
+\item When the original \texttt{sys\_read} is invoked, we issue a jump to \texttt{hooked\_read} (which needs -- of course -- the same signature as the original \texttt{sys\_read}.
+\item In \texttt{hooked\_read}, we cast \texttt{trampoline} to the same function type as the original \texttt{sys\_read}, and call it. Since \texttt{trampoline} stores the first 2 original instructions of \texttt{sys\_read} and jumps afterwards to the third original instruction of the original \texttt{sys\_read}, the result is the same as if we simply called the original \texttt{sys\_read} function.
+\item So, in \texttt{hooked\_read}, we get the return values of the original \texttt{sys\_read} function, and can process them as needed.
+\end{itemize}
+
+This technique is illustrated in \autoref{fig:trampoline-hooked-read}. The most important code snippets of \texttt{hooked\_read} can be seen here:
+
+\begin{verbatim}
+asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
+    // declarations, some sanity checks
+
+    // now we treat trampoline like a function and call it
+    // note that it has now the same "signature" as the original sys_read
+    retval = 
+      ((asmlinkage ssize_t (*)(unsigned int, 
+                               char __user*,
+                               size_t))trampoline)(fd, buf, count);
+    // appropriate processing of values
+    return retval;
+}
+\end{verbatim}
+
+So, in this way, we are able to hook \texttt{sys\_read} without changing the function pointer in the syscall table. Note that this technique heavily depends on the architecture (we implemented it for x86) and probably needs to be adjusted properly when porting it to another architecture.
 
 \todo{Philipp: bis hier her hab ich alles perfekt verstanden, aber ich würde dann noch kurz sagen, wie es weitergeht und dann vor allem wie der hook wieder entfernt wird. Außerdem (ich weiß, ich bin ganz schön überlästig :)) würde ich in der Zeichnung alle jumps explizit mit reinmachen, weil jetzt ist der weg von hooked\_read zum trampoline und der von da zum sys\_read irgendwie magic.}
 
@@ -591,10 +620,14 @@ But we can do the following: Since we have the first 2 \emph{original} instructi
     \node (sr2) [memorycell] at (5,2.35) {\texttt{[unimportant]}};
     \node (sr3) [memorycell] at (5,1.7) {\texttt{push \%ebx}};
     \node (sr4) [memorycell] at (5,1.05) {\texttt{sub \$0xc,\%esp}};
+    \node (sr5) [memorycell] at (5,0.4) {\texttt{[...]}};
     \draw [->] (2,1.25) .. controls +(0.5,0) and +(-0.5,0) .. (sr1.west);
     %% hooked_read
-    \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, minimum height=0.65cm];
-    \node (hr) [memorycell] at (10,3.5) {\texttt{hooked\_read}};
+    \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, minimum height=0.65cm, text width=4cm];
+    \node at (10, 4.9) [above] {\texttt{hooked\_read}};
+    \node (hr1) [memorycell] at (10,4.5) {\texttt{[...]}};
+    \node (hr) [memorycell] at (10,3.85) {\texttt{call trampoline}};
+    \node (hr2) [memorycell] at (10,3.2) {\texttt{[...]}};
     \draw [->] (sr1.east) .. controls +(.5,0) and +(-.5,0) .. (hr.west);
     %% trampoline
     \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
@@ -602,10 +635,11 @@ But we can do the following: Since we have the first 2 \emph{original} instructi
     \node (t1) [memorycell] at (10,1.5) {\texttt{push \%esi}};
     \node (t2) [memorycell] at (10,0.85) {\texttt{mov \$0xfffffff7,\%esi}};
     \node (t3) [memorycell] at (10,0.2) {\texttt{push \%esi}};
-    \draw [->] (t3.west) .. controls +(-.5,0) and +(.5,0) .. (sr3.east);
+    \node (t4) [memorycell] at (10,-0.45) {\texttt{jmp sys\_read+7}};
+    \draw [->] (t4.west) .. controls +(-.5,0) and +(.5,0) .. (sr3.east);
     \draw [->, rounded corners] (hr.east) -- +(.5,0) |- (t1.east);
   \end{tikzpicture}
-  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- ``issues a call'' to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}.}
+  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- ``issues a call'' to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}. Note that the assembler instructions may not be one-hundret percent working, but are more thought to illustrate the whole process.}
   \label{fig:trampoline-hooked-read}
 \end{figure}
 
