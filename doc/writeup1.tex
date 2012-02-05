@@ -19,6 +19,10 @@
 \author{Roman Karlstetter \and Philipp M\"uller}
 \date{\today}
 
+\setkomafont{disposition}{\rmfamily\bfseries}
+\setkomafont{descriptionlabel}{\rmfamily\bfseries}
+\setkomafont{title}{\rmfamily}
+
 \begin{document}
 
 \maketitle
@@ -615,6 +619,8 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
 }
 \end{verbatim}
 
+Note that we actually issue a \emph{call} to \texttt{trampoline}, even it is -- per se -- not declared as a function! But since it contains the first two instructions of the original \texttt{sys\_read} and a jump the third instruction of the original \texttt{sys\_read}, we can just call it and simulate the original \texttt{sys\_read} function.
+
 So, in this way, we are able to hook \texttt{sys\_read} without changing the function pointer in the syscall table. Note that this technique heavily depends on the architecture (we implemented it for x86) and probably needs to be adjusted properly when porting it to another architecture.
 
 \begin{figure}[t]
@@ -651,7 +657,7 @@ So, in this way, we are able to hook \texttt{sys\_read} without changing the fun
     \draw [->] (t4.west) .. controls +(-.5,0) and +(.5,0) .. (sr3.east);
     \draw [->, rounded corners] (hr.east) -- +(.5,0) |- (t1.east);
   \end{tikzpicture}
-  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- ``issues a call'' \todo{this actually is not a call, but a jump, right?} to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}. Note that the assembler instructions may not be one-hundret percent working, but are more thought to illustrate the whole process.}
+  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- issues a call to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}. Note that the assembler instructions may not be one-hundret percent working, but are more thought to illustrate the whole process.}
   \label{fig:trampoline-hooked-read}
 \end{figure}
 
@@ -777,6 +783,11 @@ the \texttt{sysfs\_dirent}s are stored ordered by ino (\todo{wtf does this stand
 When the detector now iterates over the internal datastructures to count the modules and our module is loaded and hidden, it won't see any difference compared to the output by \texttt{ls} and therefore cannot detect our module.
 
 \section{Conclusion}
+
+As you've seen, there's already quite bit the rootkit can do. However, as always with such projects, one could add more and more features. For example, one might want to 
+
+On the other hand, also the detector programmers could try more things to detect the rootkit (especially detecting the things that we've explicitly developed an evasion mechanism).
+
 write something about rootkitprogramming and -detection in general...
 \todo{famous last words go here}
 
