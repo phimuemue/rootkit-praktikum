@@ -791,5 +791,21 @@ On the other hand, also the detector programmers could try more things to detect
 write something about rootkitprogramming and -detection in general...
 \todo{famous last words go here}
 
+\appendix{}
+
+\section{How \emph{our} detector worked}
+\label{sec:our-detector}
+
+For completeness, we will shortly describe how our detector (tool to detect the rootkit of gruppe 1) worked.
+
+\begin{description}
+\item[\texttt{read} system call] Like our own rootkit, the gruppe 1 rootkit hooked the \texttt{read} system call by simply exchanging the function pointer such that it points to another function. We recognized that this hooked function differed in the first three bytes from the original \texttt{sys\_read}. Thus, we were able to detect a modified \texttt{read} system call by comparing the first three bytes.
+
+Moreover, we added a \emph{heuristic} (i.e. this is not a one hundret percent sure indicator) that is based on the actual address for the \texttt{read} system call in the system call table. If it was modified, it is probable that it differs much from the surrounding addresses. As said, however, this is just a heuristic.
+\item[Hidden processes] Gruppe 1 rootkit hid processes by simply setting their process ID to 0. Thus, it was quite easy to scan through all processes and look for an item whose PID is 0. If we find such a process, it is probable that the gruppe 1 rootkit is active.
+\item[Hidden TCP sockets] In order to detect hidden TCP sockets, we use some little trick: Our detector hooks the (potentially already hooked) \texttt{socketcall} system call, and does the same checks that were performed by the gruppe 1 rootkit. The gruppe 1 rootkit basically only alters the output of this \texttt{socketcall} for one very specific combination of parameters. We check if these particular parameters are the case, and if so, we alter them \emph{slightly}. 
+
+If the \texttt{socketcall} is hooked, this slight modification of the parameters causes the rootkit to leave the parameters as they are, which -- on the other hand -- results in the fact that, basically, \texttt{ss} can display the sockets the gruppe 1 rootkit originally wanted to hide.
+\end{description}
 
 \end{document}
