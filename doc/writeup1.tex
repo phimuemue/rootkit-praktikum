@@ -29,17 +29,17 @@
 
 This article describes a rootkit that has been implemented as a Linux Loadable Kernel Module (LKM) for the Linux kernel 2.6.32 during the Wintersemester 2011/2012 for the course Rootkit Programming at TUM supervised by Jonas Pfoh (\url{http://www.sec.in.tum.de/rootkit-programming-ws1112/}). 
 
-In the first part of the course, we step by step implemented a rootkit with several features listed below. The next thing was to develop a detector which is capable of detecting a rootkit of another group. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by another group for our rootkit.
+In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group, this is not part of this article \todo{so viel aufwand wäre es eigentlich garnicht, unser readme da mit rein zu kopieren und ein bisschen aufzubereiten, andererseits gehört es hier ja eigentlich nicht mit rein --$>$ ich würde es weglassen.}. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}).
 
 This rootkit implements several functions, that can -- independently of each other -- be turned on and off. These features are:
 
 \begin{description}
-\item [File hiding] It is possible to prevent some files to be shown. Files beginning with a certain prefix are hidden from e.g. \texttt{ls}. However, these files stay accessible.
-\item [Process hiding] It is possible to hide certain processes by their ID.
-\item [Module hiding] It is possible to hide the rootkit module from \texttt{lsmod}.
-\item [Socket hiding] The rootkit can hide certain TCP and UDP sockets from \texttt{netstat} and \texttt{ss}.
-\item [Privilege escalation] You can acquire the privileges to act as root.
-\item [Covert communication] All this functionality is turned on and off via a covert communication channel.
+\item [File hiding] It is possible to prevent some files to be shown. Files beginning with a certain prefix are hidden from e.g. \texttt{ls}. However, these files stay accessible (\autoref{filehiding}).
+\item [Process hiding] It is possible to hide certain processes by their ID (\autoref{sec:process-hiding}).
+\item [Module hiding] It is possible to hide the rootkit module from \texttt{lsmod} (\autoref{sec:module_hiding}).
+\item [Socket hiding] The rootkit can hide certain TCP and UDP sockets from \texttt{netstat} and \texttt{ss} (\autoref{sec:sockethiding}).
+\item [Privilege escalation] You can acquire the privileges to act as root (\autoref{sec:privilege_escalation}).
+\item [Covert communication] All this functionality is turned on and off via a covert communication channel (\autoref{sec:covert_communication}).
 \end{description}
 
 \section{Building, installing \& using the rootkit}
@@ -50,7 +50,7 @@ You need to have a working environment for developing kernel modules. When this 
 
 \subsection{Loading the module}
 
-The module is loaded like (probably) most other modules: using \texttt{insmod}. That is, you can just do the following:
+The module is loaded like (probably) most other modules: using \texttt{insmod}. That is, you can just do the following (of course, you need to be root):
 
 \begin{verbatim}
 root@machine:/path/to/rootkit# insmod cool_mod.ko
@@ -118,14 +118,22 @@ Command & Parameter & Example \\
 \label{tab:rootkit-commands}
 \end{table}
 
+\subsection{Unloading the module}
+To unload the module, you have to execute
+\begin{verbatim}
+root@machine:/path/to/rootkit# rmmod -w cool_mod.ko
+\end{verbatim}
+It is necessary to specify the \texttt{-w} option, as the module makes heavy changes to the read system call which is nearly all the time in use. Therefore, we have to wait until there are no users of out module left. \todo{ich bin mir nicht sicher, ob die erklärung so passt...}
+
 \section{Implementation Details -- Initial Version}
+\label{sec:implementation}
 
 This section first gives an overview on how the module is designed and then describes the technical details of each individual part of the module. 
 
 Note that this section deals with our initial implementations. After we got the rootkit detector of gruppe 5, we revised some functions.
 
 \subsection{General Design}
-
+\label{sec:general_design}
 We have split up things in "submodules" (each with its own header and implementation file), so
 that our we have some nice modular architecture. This makes our module easily extendable. Everything gets glued together in \texttt{mod.ko}.
 
@@ -177,7 +185,7 @@ Note that all these pointers are of type \texttt{void*}, since we do not know th
 \emph{Remark:} In the following, we present some code snippets. They are basically taken from our rootkit source code, but we shortened them a bit and describe just the crucial parts of them.
 
 \subsection{``Hooking'' functions in general}
-
+\label{sec:hooking_general}
 A very important aspect of a rootkit is hooking of functions. This means, we ``grab'' an original system function (which may be called by other programs!), and replace it by our own function. This way, everytime another program tries to call the original function, it automatically calls \emph{our} ``injected'' function. \autoref{fig:hooking-system-call} shows this mechanism as a schema.
 
 Of course, the injected function should behave as if it was the original function, so that the other programs (and, thus, the user) do not recognize that we have manipulated the system function.
@@ -373,7 +381,7 @@ the module gets inserted again and we can unload it with rmmod (additionally, we
 
 
 \subsection{Socket Hiding}
-
+\label{sec:sockethiding}
 Hiding sockets means that they are not displayed by neither \texttt{netstat} nor \texttt{ss}. \texttt{netstat} gets all its information through \texttt{/proc}, while \texttt{ss} gets the TCP-socket information through the NETLINK interface of the kernel (when this is available), the UDP information is also from \texttt{/proc}.
 
 We implement socket hiding by hooking the \texttt{show}-operation of the \texttt{seq\_file} interface (only of tcp and udp socket-files in \texttt{/proc/net}, of course). Therefore we look at the port and the protocol of the passed \texttt{struct socket} and compare it with the socket to hide.
@@ -381,7 +389,7 @@ We implement socket hiding by hooking the \texttt{show}-operation of the \texttt
 For TCP sockets displayed by \texttt{ss}, we hook the \texttt{socketcall} function and return an error code when it gets called with a special combination of parameters. This lets \texttt{ss} also use its fallback alternative, which is \texttt{/proc} as already described.
 
 \subsection{Privilege Escalation}
-
+\label{sec:privilege_escalation}
 Privilege escalation is done using a simple mechanism: We set the user id of the current process to 0 (which corresponds to user \texttt{root}). This is done by the following code snippet:
 
 \begin{verbatim}
@@ -399,6 +407,7 @@ The function \texttt{prepare\_creds} creates a copy of the current threads crede
 While one could think it would be more convenient to directly modify the task's credentials, this is explicitly discouraged in the linux source code\footnote{File \texttt{kernel/cred.c}}.
 
 \subsection{Covert Communication}
+\label{sec:covert_communication}
 We hook \texttt{sys\_read} and intercept all input from standard in. 
 
 First, we try to match a magic activating command (this is the three hashes and a space, followed by one of the commands described in \autoref{sec:using-the-module}). After this command, we read until a whitespace occurs. After that, we analyze what has been entered and execute the corresponding command, if 
@@ -433,13 +442,13 @@ Afterwards, they only have to check whether \texttt{result} is negative. If so, 
 \begin{verbatim}
 ls -1 /sys/module/
 \end{verbatim}
-produces, which is the current number of modules - 1, as our module doesn't show up in this list. In \autoref{sec:module-hiding-evasion}, we describe what can be done to avoid detection this way (although you might already have a guess).
+produces, which is the one less than the actual number, as our module doesn't show up in this list. In \autoref{sec:module-hiding-evasion}, we describe what can be done to avoid detection this way (although you might already have a guess).
 
 \end{description}
 
 \section{Detection Evasion}
 \label{sec:detection-evasion}
-As we really don't want our rootkit be detected by the detector of Gruppe 5, we have some great ideas how to make our rootkit even better so that we finally can achieve world domination. These ideas are described in this section.
+As we really don't want our rootkit to be detected by the detector of Gruppe 5, we have some great ideas how to make our rootkit even better so that we finally can achieve world domination. These ideas are described in this section.
 
 Thanks to our modular architecture, the changes could be done separately in the different submodules, such that the old code didn't have to be changed or adapted. This is true even for such fundamental things as the hooked \texttt{sys\_read}, which will be described first.
 
