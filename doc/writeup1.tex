@@ -1,4 +1,4 @@
-\documentclass[10pt, letterpaper]{article}
+\documentclass[10pt, letterpaper]{scrartcl}
 \usepackage [english]{babel}
 \usepackage{enumitem}
 \usepackage{geometry}
@@ -14,7 +14,8 @@
 
 \geometry{margin=2.5cm}
 
-\title{Rootkit of gruppe 6}
+\title{Rootkit of Gruppe 6}
+\subtitle{TUM \\Chair for IT Security\\  Rootkit Programming 2011/2012}
 \author{Roman Karlstetter \and Philipp M\"uller}
 \date{\today}
 
@@ -26,7 +27,11 @@
 \todo{update this section to reflect the detection and detection evasion part of this writeup and possibly give some general overview of how this whole thing evolved}
 
 
-This rootkit implements several functions, that can -- independently of each other -- be turned on and off. They are outlined here:
+This article describes a rootkit that has been implemented as a Linux Loadable Kernel Module (LKM) for the Linux kernel 2.6.32 during the Wintersemester 2011/2012 for the course Rootkit Programming at TUM supervised by Jonas Pfoh (\url{http://www.sec.in.tum.de/rootkit-programming-ws1112/}). 
+
+In the first part of the course, we step by step implemented a rootkit with several features listed below. The next thing was to develop a detector which is capable of detecting a rootkit of another group. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by another group for our rootkit.
+
+This rootkit implements several functions, that can -- independently of each other -- be turned on and off. These features are:
 
 \begin{description}
 \item [File hiding] It is possible to prevent some files to be shown. Files beginning with a certain prefix are hidden from e.g. \texttt{ls}. However, these files stay accessible.
@@ -243,7 +248,7 @@ void make_page_writable(long unsigned int _addr){
 }
 \end{verbatim}
 
-That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}, wich is a macro defined in the linux kernel). \todo{Is this correct, what I'm writing here?}
+That is, \texttt{make\_page\_writable} first retrieves the page table entry which contains a given address (\texttt{\_addr}). Afterwards, it allows this page to be written (by ORing with \texttt{\_PAGE\_RW}, wich is a macro defined in the linux kernel). % \todo{Is this correct, what I'm writing here?} -> yes it probably is!
 
 Hooking functions is basically done in this way. Note that the functions we want to hook need not necessarily reside in the system call table, but can be at other locations as well. The mechanism of hooking, however, is equivalent.
 
@@ -637,7 +642,7 @@ So, in this way, we are able to hook \texttt{sys\_read} without changing the fun
     \draw [->] (t4.west) .. controls +(-.5,0) and +(.5,0) .. (sr3.east);
     \draw [->, rounded corners] (hr.east) -- +(.5,0) |- (t1.east);
   \end{tikzpicture}
-  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- ``issues a call'' to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}. Note that the assembler instructions may not be one-hundret percent working, but are more thought to illustrate the whole process.}
+  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- ``issues a call'' \todo{this actually is not a call, but a jump, right?} to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}. Note that the assembler instructions may not be one-hundret percent working, but are more thought to illustrate the whole process.}
   \label{fig:trampoline-hooked-read}
 \end{figure}
 
