@@ -603,8 +603,6 @@ asmlinkage ssize_t hooked_read(unsigned int fd, char __user *buf, size_t count){
 
 So, in this way, we are able to hook \texttt{sys\_read} without changing the function pointer in the syscall table. Note that this technique heavily depends on the architecture (we implemented it for x86) and probably needs to be adjusted properly when porting it to another architecture.
 
-\todo{Philipp: bis hier her hab ich alles perfekt verstanden, aber ich würde dann noch kurz sagen, wie es weitergeht und dann vor allem wie der hook wieder entfernt wird. Außerdem (ich weiß, ich bin ganz schön überlästig :)) würde ich in der Zeichnung alle jumps explizit mit reinmachen, weil jetzt ist der weg von hooked\_read zum trampoline und der von da zum sys\_read irgendwie magic.}
-
 \begin{figure}[t]
   \centering
   \begin{tikzpicture}
@@ -643,8 +641,6 @@ So, in this way, we are able to hook \texttt{sys\_read} without changing the fun
   \label{fig:trampoline-hooked-read}
 \end{figure}
 
-
-
 \subsection{Hiding sockets from \texttt{ss} another way}
 \label{sec:socket-hiding-evasion}
 
@@ -666,7 +662,44 @@ So, if we are able to modify this sequence of \texttt{nlmsghdr}s that is generat
 
 \texttt{hooked\_socketcall} works as follows: First, we issue a call to the original \texttt{socketcall} function so that we get the \emph{original} result. After that, we are going to modify this result appropriately. Since \texttt{recvmsg} returns the number of bytes stored in the sequence, we also have to remember and adjust this number. It is stored in \texttt{retval}.
 
-We are going to modify the result using a similar technique to that described in \autoref{filehiding}: If we find an entry to be hidden, we take all remaining entries and move them one position forward (see \autoref{fig:filehiding} for a visualization, but remember that we are here talking about \texttt{nlmsghdr}s). Therefore, we iterate over all the entries and check for each entry if it shall be hidden.
+We are going to modify the result using a similar technique to that described in \autoref{filehiding}: If we find an entry to be hidden, we take all remaining entries and move them one position forward (see \autoref{fig:sockethiding2} for a visualization, but remember that we are here talking about \texttt{nlmsghdr}s). Therefore, we iterate over all the entries and check for each entry if it shall be hidden.
+
+\begin{figure}[ht]
+  \centering
+  \begin{tikzpicture}
+    %% before
+    \draw [draw=black] (0,0) rectangle (3,0.5);
+    \draw [draw=black] (3,0) rectangle (5,0.5);
+    \draw [draw=black] (5,0) rectangle (9,0.5);
+    \draw [draw=black] (9,0) rectangle (12,0.5);
+    \node at (1.5, -0.05) [above] {\texttt{nlmsghdr1}};
+    \node at (4,   -0.05) [above] {\texttt{nlmsghdr2}};
+    \node at (7,   -0.05) [above] {\texttt{nlmsghdr3}};
+    \node at (10.5,-0.05) [above] {\texttt{nlmsghdr4}};
+    \draw (12, 0.5) -- (15, 0.5) [snake=snake, pattern = north east lines] -- (15, 0) [snake=none]-- (12,0) -- (12, 0.5);
+    \node at (13.5, 0) [above] {\texttt{0x123}};
+    \draw (12, 1)[above] node {Boundary before (original no. bytes)} [dashed, thick] -- (12, -0.5);
+    %% afterwards
+    \draw [draw=black] (0,-1) rectangle (3,-1.5);
+    %\draw [draw=black] (3,-1) rectangle (5,-1.5);
+    \draw [draw=black] (3,-1) rectangle (7,-1.5);
+    \draw [draw=black] (7,-1) rectangle (10,-1.5);
+    \node at (1.5, -1.55) [above] {\texttt{nlmsghdr1}};
+    %\node at (4,   -1.55) [above] {\texttt{nlmsghdr2}};
+    \node at (5,   -1.55) [above] {\texttt{nlmsghdr3}};
+    \node at (8.5,-1.55) [above] {\texttt{nlmsghdr4}};
+    \draw (10, -1.5) -- (15, -1.5) [snake=snake, pattern = north east lines] -- (15, -1) [snake=none]-- (10,-1) -- (10, -1.5);
+    \node at (10.8, -1.5) [above] {\texttt{..ghdr4}};
+    \node at (13.5, -1.5) [above] {\texttt{0x123}};
+    \draw (10, -2)[below] node {Boundary after (modified no. bytes)} [dashed, thick] -- (10, -0.5);
+    \draw [->, draw=black, thick] (5,0) -- (3, -1);
+    \draw [->, draw=black, thick] (12,0) -- (10, -1);
+  \end{tikzpicture}
+  \caption{The second \texttt{nlmsghdr} is hidden by copying the remaining buffer forward. Note that the number of bytes returned are adjusted (indicated by boundaries).}
+  \label{fig:sockethiding2}
+\end{figure}
+
+Note that we have to take care of how long the current \texttt{nlmsghdr} is. This length (in bytes) can be computed using \texttt{NLMSG\_ALIGN((h)->nlmsg\_len)}, where \texttt{h} is the current \texttt{nlmsghdr}. So, the following code is basically used for modifying the buffer:
 
 \begin{verbatim}
 currhdr = (char*)h; // current entry
@@ -680,7 +713,7 @@ if (checkport(h)){  // shall we hide this entry?
 }
 \end{verbatim}
 
-\todo{Philipp: auch sehr gut, aber am ende fehlen auch hier noch ein paar abschließende worte :)}
+With this new technique, the rootkit detector is not able to detect if there are sockets running, since it only checks whether \texttt{socket(AF\_NETLINK, SOCK\_RAW, NETLINK\_INET\_DIAG)} returns \texttt{-1}.
 
 \subsection{Removing module from sysfs-datastructures}
 \label{sec:module-hiding-evasion}
