@@ -717,7 +717,45 @@ With this new technique, the rootkit detector is not able to detect if there are
 
 \subsection{Removing module from sysfs-datastructures}
 \label{sec:module-hiding-evasion}
-This part of the detection evasion is probably the most straightforward one. As the detector iterates over the \texttt{sysfs\_dirent}s and counts them, the obvious thing to do is to remove (and when the module should be added again: re-add) the respective \texttt{sysfs\_dirent} from this siblings-list. What makes our live even easier is the fact that there are functions in the \texttt{sysfs}-implementation that do exaclty this: \texttt{sysfs\_unlink\_sibling} and \texttt{sysfs\_link\_sibling}. As these functions are \texttt{static}, we have to copy them (and the necessary \texttt{struct}-definitions) to our module. After that, when hiding the module, we just use the \texttt{sysfs\_unlink\_sibling} function to remove it from the list. 
+
+This part of the detection evasion is probably the most straightforward one. As the detector iterates over the \texttt{sysfs\_dirent}s and counts them, the obvious thing to do is to remove (and when the module should be added again: re-add) the respective \texttt{sysfs\_dirent} from this siblings-list. What makes our live even easier is the fact that there are functions in the \texttt{sysfs}-implementation that do exaclty this: \texttt{sysfs\_unlink\_sibling} and \texttt{sysfs\_link\_sibling}. As these functions are \texttt{static}, we have to copy them (and the necessary \texttt{struct}-definitions) to our module. After that, when hiding the module, we just use the \texttt{sysfs\_unlink\_sibling} function to remove it from the list (see figure \ref{fig:unlink-sysfs_dirent}).
+
+It is a remarkable fact that removing the module from all these datastructures does not affect the functionality of the rootkit.
+
+\begin{figure}[ht]
+  \newcommand{\listentry}[2]{
+    \draw[draw=black] (#1,0.5) rectangle (#1+3,2);
+    \draw[draw=black] (#1,1.4) -- (#1+3,1.4);
+    \node at (#1+1.5, 1.35) [above] {\texttt{#2}};
+  }
+  \centering
+  \subfigure[Original list of \texttt{sysfs\_dirents}]{
+  \begin{tikzpicture}[scale=0.9]
+    \listentry{1}{sysfs\_dirent1}
+    \listentry{5}{sysfs\_dirent2}
+    \listentry{9}{sysfs\_dirent3}
+    \listentry{13}{sysfs\_dirent4}
+    \draw[->] (4,1) .. controls +(0.5,0) and +(-.5,0) .. (5,1.7);
+    \draw[->] (8,1) .. controls +(0.5,0) and +(-.5,0) .. (9,1.7);
+    \draw[->] (12,1) .. controls +(0.5,0) and +(-.5,0) .. (13,1.7);
+  \end{tikzpicture}
+  }
+  \subfigure[Modified list of \texttt{sysfs\_dirents}. \texttt{sysfs\_dirent3} is now hidden, since -- even if it still contains a pointer to the next \texttt{sysfs\_dirent} -- it is not reachable when traversing the list.]{
+  \begin{tikzpicture}[scale=0.9]
+    \listentry{1}{sysfs\_dirent1}
+    \listentry{5}{sysfs\_dirent2}
+    \begin{scope}[opacity=0.5]
+      \listentry{9}{sysfs\_dirent3}
+      \draw[->] (12,1) .. controls +(0.5,0) and +(-.5,0) .. (13,1.6);
+    \end{scope}
+    \listentry{13}{sysfs\_dirent4}
+    \draw[->] (4,1) .. controls +(0.5,0) and +(-.5,0) .. (5,1.7);
+    \draw[->, rounded corners] (8,1) -| (8.5,2.5) -- (12.5,2.5) |- (13,1.8);
+  \end{tikzpicture}
+  }
+  \caption{Removing a \texttt{sysfs\_dirent} from the list}
+  \label{fig:unlink-sysfs_dirent}
+\end{figure}
 
 \textbf{One thing to note:} While removing is done just by adapting the pointers in the list, adding them is a little bit more tricky, as 
 the \texttt{sysfs\_dirent}s are stored ordered by ino (\todo{wtf does this stand for? ino}). If you just insert the \texttt{sysfs\_dirent} at the beginning of the list, this will in most cases lead to unintentional behaviour which may prevent to reload the module.
