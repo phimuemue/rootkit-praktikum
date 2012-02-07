@@ -26,11 +26,13 @@
 \begin{document}
 
 \maketitle
+\tableofcontents
+\newpage
 
 \section{Overview}
 This article describes a rootkit that has been implemented as a Linux Loadable Kernel Module (LKM) for the Linux kernel 2.6.32 during the Wintersemester 2011/2012 for the course Rootkit Programming at TUM supervised by Jonas Pfoh (\url{http://www.sec.in.tum.de/rootkit-programming-ws1112/}). 
 
-In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group, this is not part of this article. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}).
+In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group, you can find the basic ideas in \autoref{sec:our-detector}. In \autoref{sec:syscalltable-without-system-map}, we shortly describe how we implemented finding the syscall table dynamically without accessing the \texttt{System.map}-file. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}).
 
 This rootkit implements several functions, that can -- independently of each other -- be turned on and off. These features are:
 
@@ -778,15 +780,17 @@ It is a remarkable fact that removing the module from all these datastructures d
 \end{figure}
 
 \textbf{One thing to note:} While removing is done just by adapting the pointers in the list, adding them is a little bit more tricky, as 
-the \texttt{sysfs\_dirent}s are stored ordered by ino (\todo{wtf does this stand for? ino}). If you just insert the \texttt{sysfs\_dirent} at the beginning of the list, this will in most cases lead to unintentional behaviour which may prevent to reload the module.
+the \texttt{sysfs\_dirent}s are stored ordered by inode. If you just insert the \texttt{sysfs\_dirent} at the beginning of the list, this will in most cases lead to unintentional behaviour which may prevent to reload the module.
 
 When the detector now iterates over the internal datastructures to count the modules and our module is loaded and hidden, it won't see any difference compared to the output by \texttt{ls} and therefore cannot detect our module.
 
 \section{Conclusion}
 
-As you've seen, there's already quite bit the rootkit can do. However, as always with such projects, one could add more and more features. For example, one might want to 
+As you've seen, there's already quite bit the rootkit can do. However, as always with such projects, one could add more and more features. For example, one might want to aggravate the rootkit detection by ``going one level deeper'', e.g. hide files in the vfs-layer of the kernel.
 
-On the other hand, also the detector programmers could try more things to detect the rootkit (especially detecting the things that we've explicitly developed an evasion mechanism).
+On the other hand, also the detector programmers could do the same things to enhance their detectors.
+
+
 
 write something about rootkitprogramming and -detection in general...
 \todo{famous last words go here}
@@ -807,5 +811,18 @@ Moreover, we added a \emph{heuristic} (i.e. this is not a one hundret percent su
 
 If the \texttt{socketcall} is hooked, this slight modification of the parameters causes the rootkit to leave the parameters as they are, which -- on the other hand -- results in the fact that, basically, \texttt{ss} can display the sockets the gruppe 1 rootkit originally wanted to hide.
 \end{description}
+
+\section{Finding the system call table without System.map}
+\label{sec:syscalltable-without-system-map}
+
+As mentioned in \autoref{sec:general_design}, the System.map file helps us to locate the system call table. However, it may well be the case that this file is not present or accessible to us. Therefore, we also implemented a routine that is capable of finding the system call table on itself.
+
+Therefore, it uses a quite straightforward approach. We simply iterate over the memory (starting at \texttt{\&lock\_kernel}, until \texttt{\&loops\_per\_jiffy}. We check in each step, whether for the current position \texttt{h} the following holds:
+
+\begin{verbatim}
+ h[__NR_close] == sys_close
+\end{verbatim}
+
+If the above holds, it is highly probable that \texttt{h} is the location of the system call table. It \emph{might} be by incident that this condition holds for other memory locations in the specified section as well. However, we got quite good results, so we didn't bother checking more conditions, which might of course be done.
 
 \end{document}
