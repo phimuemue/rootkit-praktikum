@@ -32,7 +32,7 @@
 \section{Overview}
 This article describes a rootkit that has been implemented as a Linux Loadable Kernel Module (LKM) for the Linux kernel 2.6.32 during the Wintersemester 2011/2012 for the course Rootkit Programming at TUM supervised by Jonas Pfoh (\url{http://www.sec.in.tum.de/rootkit-programming-ws1112/}). 
 
-In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group, you can find the basic ideas in \autoref{sec:our-detector}. In \autoref{sec:syscalltable-without-system-map}, we shortly describe how we implemented finding the syscall table dynamically without accessing the \texttt{System.map}-file. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}).
+In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group. You can find the basic ideas in \autoref{sec:our-detector}. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}). In \autoref{sec:syscalltable-without-system-map}, we shortly describe how we implemented finding the syscall table dynamically without accessing the \texttt{System.map}-file.
 
 This rootkit implements several functions, that can -- independently of each other -- be turned on and off. These features are:
 
@@ -40,7 +40,7 @@ This rootkit implements several functions, that can -- independently of each oth
 \item [File hiding] It is possible to prevent some files to be shown. Files beginning with a certain prefix are hidden from e.g. \texttt{ls}. However, these files stay accessible (\autoref{filehiding}).
 \item [Process hiding] It is possible to hide certain processes by their ID (\autoref{sec:process-hiding}).
 \item [Module hiding] It is possible to hide the rootkit module from \texttt{lsmod} (\autoref{sec:module_hiding}).
-\item [Socket hiding] The rootkit can hide certain TCP and UDP sockets from \texttt{netstat} and \texttt{ss} (\autoref{sec:sockethiding}).
+\item [Socket hiding] The rootkit can hide TCP and UDP sockets (identified by their port number and the protocol) from \texttt{netstat} and \texttt{ss} (\autoref{sec:sockethiding}) .
 \item [Privilege escalation] You can acquire the privileges to act as root (\autoref{sec:privilege_escalation}).
 \item [Covert communication] All this functionality is turned on and off via a covert communication channel (\autoref{sec:covert_communication}).
 \end{description}
@@ -133,7 +133,7 @@ It is necessary to specify the \texttt{-w} option, as the module makes heavy cha
 
 This section first gives an overview on how the module is designed and then describes the technical details of each individual part of the module. 
 
-Note that this section deals with our initial implementations. After we got the rootkit detector of gruppe 5, we revised some functions.
+Note that this section deals with our initial implementations. After we got the rootkit detector of gruppe 5, we revised some functions (see \autoref{sec:detection-evasion}).
 
 \subsection{General Design}
 \label{sec:general_design}
@@ -235,7 +235,7 @@ void hook_read(fun_void_charp_int cb){
 }
 \end{verbatim}
 
-Let us consider this function line by line. First, we locate the system call table, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \texttt{asmlinkage ssize\_t (*)(unsigned int, char \_\_user *, size\_t)}. This is a pointer to a function returning a value of type \texttt{size\_t} and taking three arguments, just like the original \texttt{read} system call declared in \href{http://lxr.linux.no/linux+v2.6.32/arch/x86/include/asm/syscalls.h}{\texttt{linux/syscalls.h}} in the Linux kernel.}. This is necessary for several reasons: First, we want to be able to restore the original call if we unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand.
+Let us consider this function line by line. First, we locate the system call table\footnote{Location is actually done by \texttt{create\_sysmap.sh}, we're just using the pointer to it.}, which is basically just an array of pointers to system call functions. Afterwards, we retrieve the pointer to the original \texttt{read} system call and store it in  \texttt{original\_read}\footnote{\texttt{original\_read} is a function pointer of type \texttt{asmlinkage ssize\_t (*)(unsigned int, char \_\_user *, size\_t)}. This is a pointer to a function returning a value of type \texttt{size\_t} and taking three arguments, just like the original \texttt{read} system call declared in \href{http://lxr.linux.no/linux+v2.6.32/arch/x86/include/asm/syscalls.h}{\texttt{linux/syscalls.h}} in the Linux kernel.}. This is necessary for several reasons: First, we want to be able to restore the original call if we unload the module. Moreover, as we will see later, we delegate the work to the original \texttt{read} function and just do some manipulations beforehand and afterwards.
 
 Let us -- for now -- skip the next line and directly consider the following line from the above snippet:
 
@@ -263,7 +263,7 @@ That is, \texttt{make\_page\_writable} first retrieves the page table entry whic
 
 Hooking functions is basically done in this way. Note that the functions we want to hook need not necessarily reside in the system call table, but can be at other locations as well. The mechanism of hooking, however, is equivalent.
 
-However, as we will see later, there are other techniques to hook a system call (see \autoref{sec:hooking-read-2}).
+As we will see later, there are other techniques to hook a system call (see \autoref{sec:hooking-read-2}).
 
 \subsection{File Hiding}
 \label{filehiding}
@@ -411,7 +411,7 @@ While one could think it would be more convenient to directly modify the task's 
 
 \subsection{Covert Communication}
 \label{sec:covert_communication}
-We hook \texttt{sys\_read} and intercept all input from standard in. 
+We hook \texttt{sys\_read} and intercept all input from STDIN. 
 
 First, we try to match a magic activating command (this is the three hashes and a space, followed by one of the commands described in \autoref{sec:using-the-module}). After this command, we read until a whitespace occurs. After that, we analyze what has been entered and execute the corresponding command, if 
 
@@ -428,9 +428,9 @@ If it does expect an argument (this is always a number), we read again until a w
 We received a rootkit detector for our rootkit that detects three aspects of our rootkit. This section gives an overview about how detection works.
 
 \begin{description}
-\item[Hooked Read Function] As mentioned in \autoref{fig:hooking-system-call}, we hook \texttt{sys\_read} by changing the function pointer in the system call table. This, however, leaves suspicious traces, since a detector can simply extract the original adress from the \texttt{system.map} file. This is exactly what the detector of gruppe 5 does. However, for this to work correctly, the detector has to be prepared \textit{before} the rootkit gets loaded. Under the assumption that the rootkit is loaded before the detector (and that the detector cannot do any analysis or preparation thereof in a clean system), the rootkit could simply hook the \texttt{system.map} file such that the values in this file correspond to the actual situation when the rootkit is active.
+\item[Hooked Read Function] As mentioned in \autoref{fig:hooking-system-call}, we hook \texttt{sys\_read} by changing the function pointer in the system call table. This, however, leaves suspicious traces, since a detector can simply extract the original adress from the \texttt{System.map} file. This is exactly what the detector of gruppe 5 does. However, for this to work correctly, the detector has to be prepared \textit{before} the rootkit gets loaded. Under the assumption that the rootkit is loaded before the detector (and that the detector cannot do any analysis or preparation thereof in a clean system), the rootkit could simply hook the \texttt{System.map} file such that the values in this file correspond to the actual situation when the rootkit is active.
 
-Subsection \ref{sec:hooking-read-2} describes how we evade this detection.
+However, we use another approach which is described in \autoref{sec:hooking-read-2}.
 \item[Hooked socketcall] In our initial version, we simply hooked the \texttt{sys\_socket} function\footnote{We actually hooked \texttt{socketcall}, because \texttt{sys\_socket} isn't accessible directly, but every call to \texttt{sys\_socket} is handled by the function \texttt{socketcall}.}, and simply checked whether the arguments to this function are the ones given by the program \texttt{ss}. If so, we would simply return -1, so that \texttt{ss} uses its fallback.
 
 Thus, the rootkit detector simply does the following:
@@ -509,9 +509,9 @@ To understand how this works, let us first consider some disassembly of the \tex
 \texttt{(gdb) disass sys\_read\ sys\_read+40}} of this function:
 
 \begin{verbatim}
-0xc10ae026:	push   %esi
-0xc10ae027:	mov    $0xfffffff7,%esi
-0xc10ae02c:	push   %ebx
+0xc10ae026:	push   %esi              ;; 1 Byte
+0xc10ae027:	mov    $0xfffffff7,%esi  ;; 6 Byte
+0xc10ae02c:	push   %ebx              
 0xc10ae02d:	sub    $0xc,%esp
 \end{verbatim}
 
@@ -522,7 +522,7 @@ We don't need to examine what these instructions do exactly, but let us consider
 0xc10ae02b:	[...]                   ;here we still have the original bytes
 \end{verbatim}
 
-It remains to explain how we can alter the machine instructions of \texttt{sys\_read} at runtime. This is done using the following code snippets\footnote{Note that this is not a verbatim excerpt of the code, but just the essential parts for hooking shown together.}:
+It remains to explain how we can alter the machine instructions of \texttt{sys\_read} at runtime. This is done using the following code snippets\footnote{Note that this is not a verbatim excerpt of the code, but just the essential parts for hooking.}:
 
 First of all, we recognize that for the Jump-instruction we want to insert, we need five bytes (one byte for the JMP, and four bytes for the address). So we do
 
@@ -556,7 +556,10 @@ Note that -- as soon as the actual jump occurs -- the instruction pointer is alr
 So, it remains to backup the original bytes and install the jump-instruction. Therefore, we wrote a small auxiliary function \texttt{\_memcpy} that behaves (or at least should behave) just like the well-known \texttt{memcpy}. It takes one additional parameter, if this is 1, the function handles write-protected memory sections properly.
 
 \begin{verbatim}
+// backup original bytes
 _memcpy( syscall_code, sys_call_table[__NR_read], sizeof(syscall_code), 0);
+
+// insert jump instruction
 _memcpy( sys_call_table[__NR_read], new_syscall_code, sizeof(syscall_code), 1);
 \end{verbatim}
 
@@ -780,17 +783,17 @@ It is a remarkable fact that removing the module from all these datastructures d
 \end{figure}
 
 \textbf{One thing to note:} While removing is done just by adapting the pointers in the list, adding them is a little bit more tricky, as 
-the \texttt{sysfs\_dirent}s are stored ordered by inode. If you just insert the \texttt{sysfs\_dirent} at the beginning of the list, this will in most cases lead to unintentional behaviour which may prevent to reload the module.
+the \texttt{sysfs\_dirent}s are stored ordered by inode. If you just insert the \texttt{sysfs\_dirent} at the beginning of the list, this may prevent reloading the module.
 
 When the detector now iterates over the internal datastructures to count the modules and our module is loaded and hidden, it won't see any difference compared to the output by \texttt{ls} and therefore cannot detect our module.
 
 \section{Conclusion}
 
-As you've seen, there's already quite bit the rootkit can do. However, as always with such projects, one could add more and more features. For example, one might want to aggravate the rootkit detection by ``going one level deeper'', e.g. hide files in the vfs-layer of the kernel.
+As you've seen, there's already quite bit the rootkit can do. However, as always with such projects, one could add more and more features. For example, one might want to aggravate the rootkit detection by ``going one level deeper'', e.g. hide files in the vfs-layer of the kernel. On the other hand, the detector programmers could do the very same things to enhance their detectors.
 
-On the other hand, also the detector programmers could do the same things to enhance their detectors.
+In the end, this really shows how important it is to keep one's systems clean and maintain a high security standard. Software vulnerabilities that temporarily give root permissions and therefore allow the installation of a rootkit are really a big problem. Once the system is contaminated by a rootkit, one might not even notice this.
 
-\paragraph{One last remark:}This module has been developed for educational purposes only. Do \textit{not} use it to hack CIA or other similar institutions.
+\paragraph{One last remark:}This module has been developed for educational purposes only. Do \textit{not} use it to hack CIA or similar institutions.
 
 \appendix{}
 
@@ -800,7 +803,7 @@ On the other hand, also the detector programmers could do the same things to enh
 For completeness, we will shortly describe how our detector (tool to detect the rootkit of gruppe 1) worked.
 
 \begin{description}
-\item[\texttt{read} system call] Like our own rootkit, the gruppe 1 rootkit hooked the \texttt{read} system call by simply exchanging the function pointer such that it points to another function. We recognized that this hooked function differed in the first three bytes from the original \texttt{sys\_read}. Thus, we were able to detect a modified \texttt{read} system call by comparing the first three bytes.
+\item[\texttt{read} system call] Like our own rootkit, the gruppe 1 rootkit hooked the \texttt{read} system call by simply exchanging the function pointer such that it points to another function. We recognized that this hooked function differed in the first few bytes from the original \texttt{sys\_read}. Thus, we were able to detect a modified \texttt{read} system call by comparing the first three bytes.
 
 Moreover, we added a \emph{heuristic} (i.e. this is not a one hundret percent sure indicator) that is based on the actual address for the \texttt{read} system call in the system call table. If it was modified, it is probable that it differs much from the surrounding addresses. As said, however, this is just a heuristic.
 \item[Hidden processes] Gruppe 1 rootkit hid processes by simply setting their process ID to 0. Thus, it was quite easy to scan through all processes and look for an item whose PID is 0. If we find such a process, it is probable that the gruppe 1 rootkit is active.
@@ -812,9 +815,9 @@ If the \texttt{socketcall} is hooked, this slight modification of the parameters
 \section{Finding the system call table without System.map}
 \label{sec:syscalltable-without-system-map}
 
-As mentioned in \autoref{sec:general_design}, the System.map file helps us to locate the system call table. However, it may well be the case that this file is not present or accessible to us. Therefore, we also implemented a routine that is capable of finding the system call table on itself.
+As mentioned in \autoref{sec:general_design}, the \texttt{System.map} file helps us to locate the system call table. However, it may well be the case that this file is not present or accessible to us. Therefore, we also implemented a routine that is capable of finding the system call table on itself, without \texttt{System.map}.
 
-Therefore, it uses a quite straightforward approach. We simply iterate over the memory (starting at \texttt{\&lock\_kernel}, until \texttt{\&loops\_per\_jiffy}. We check in each step, whether for the current position \texttt{h} the following holds:
+Therefore, it uses a quite straightforward approach. We simply iterate over the memory (starting at \texttt{\&lock\_kernel}, until \texttt{\&loops\_per\_jiffy}). We check in each step, whether for the current potential position of the syscall table \texttt{h} the following holds:
 
 \begin{verbatim}
  h[__NR_close] == sys_close
