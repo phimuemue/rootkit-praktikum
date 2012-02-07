@@ -28,12 +28,9 @@
 \maketitle
 
 \section{Overview}
-\todo{update this section to reflect the detection and detection evasion part of this writeup and possibly give some general overview of how this whole thing evolved}
-
-
 This article describes a rootkit that has been implemented as a Linux Loadable Kernel Module (LKM) for the Linux kernel 2.6.32 during the Wintersemester 2011/2012 for the course Rootkit Programming at TUM supervised by Jonas Pfoh (\url{http://www.sec.in.tum.de/rootkit-programming-ws1112/}). 
 
-In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group, this is not part of this article \todo{so viel aufwand wäre es eigentlich garnicht, unser readme da mit rein zu kopieren und ein bisschen aufzubereiten, andererseits gehört es hier ja eigentlich nicht mit rein --$>$ ich würde es weglassen.}. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}).
+In the first part of the course, we step by step implemented a rootkit with several features listed below (detailed description of implementation: \autoref{sec:implementation}). The next thing was to develop a program which is capable of detecting a rootkit of another group, this is not part of this article. The last challange was to adopt our own rootkit such that it does not get detected by a detector written by Gruppe 5 for our rootkit (see \autoref{sec:detectorofgruppe5} \& \autoref{sec:detection-evasion}).
 
 This rootkit implements several functions, that can -- independently of each other -- be turned on and off. These features are:
 
@@ -127,7 +124,7 @@ To unload the module, you have to execute
 \begin{verbatim}
 root@machine:/path/to/rootkit# rmmod -w cool_mod.ko
 \end{verbatim}
-It is necessary to specify the \texttt{-w} option, as the module makes heavy changes to the read system call which is nearly all the time in use. Therefore, we have to wait until there are no users of out module left. \todo{ich bin mir nicht sicher, ob die erklärung so passt...}
+It is necessary to specify the \texttt{-w} option, as the module makes heavy changes to the read system call which is nearly all the time in use. Therefore, we have to wait until there are no users of our module left.
 
 \section{Implementation Details -- Initial Version}
 \label{sec:implementation}
@@ -627,10 +624,10 @@ So, in this way, we are able to hook \texttt{sys\_read} without changing the fun
   \centering
   \begin{tikzpicture}
     %% system call table
-    \draw (0,0) rectangle (2,3);
-    \node at (1,3) [above] {System call table};
-    \draw (0,1) rectangle (2,1.5);
-    \node (p) at (1,1) [above] {\texttt{0x15bf102a}};
+    \draw (-0.5,0) rectangle (1.5,3);
+    \node at (0.5,3) [above] {System call table};
+    \draw (-0.5,1) rectangle (1.5,1.5);
+    \node (p) at (0.5,1) [above] {\texttt{0x15bf102a}};
     %% modified sys_read
     \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
     \node at (5,3.3) [above] {Modified \texttt{sys\_read}};
@@ -639,7 +636,9 @@ So, in this way, we are able to hook \texttt{sys\_read} without changing the fun
     \node (sr3) [memorycell] at (5,1.7) {\texttt{push \%ebx}};
     \node (sr4) [memorycell] at (5,1.05) {\texttt{sub \$0xc,\%esp}};
     \node (sr5) [memorycell] at (5,0.4) {\texttt{[...]}};
-    \draw [->] (2,1.25) .. controls +(0.5,0) and +(-0.5,0) .. (sr1.west);
+    \node (sr6) [memorycell] at (5,-0.25) {\texttt{ret}};
+
+    \draw [->] (1.5,1.25) .. controls +(0.5,0) and +(-0.5,0) .. (sr1.west);
     %% hooked_read
     \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, minimum height=0.65cm, text width=4cm];
     \node at (10, 4.9) [above] {\texttt{hooked\_read}};
@@ -647,17 +646,18 @@ So, in this way, we are able to hook \texttt{sys\_read} without changing the fun
     \node (hr) [memorycell] at (10,3.85) {\texttt{call trampoline}};
     \node (hr2) [memorycell] at (10,3.2) {\texttt{[...]}};
     \draw [->] (sr1.east) .. controls +(.5,0) and +(-.5,0) .. (hr.west);
+    \draw [->] (sr6.east)..controls +(.5,0) and +(-.5,0) .. (hr2.west);
     %% trampoline
     \tikzstyle {memorycell} = [shape=rectangle, draw=black, minimum width=4cm, text width=4cm, minimum height=0.65cm];
     \node at (10,1.8) [above] {\texttt{trampoline}};
     \node (t1) [memorycell] at (10,1.5) {\texttt{push \%esi}};
     \node (t2) [memorycell] at (10,0.85) {\texttt{mov \$0xfffffff7,\%esi}};
-    \node (t3) [memorycell] at (10,0.2) {\texttt{push \%esi}};
-    \node (t4) [memorycell] at (10,-0.45) {\texttt{jmp sys\_read+7}};
-    \draw [->] (t4.west) .. controls +(-.5,0) and +(.5,0) .. (sr3.east);
+    \node (t3) [memorycell] at (10,0.2) {\texttt{jmp sys\_read+7}};
+    \node (t4) [memorycell] at (10,-0.45) {\texttt{[...]}};
+    \draw [->, rounded corners] (t3.east) -- +(0.5,0) -- +(0.5,-1.3) -- ++(-9.7,-1.3) |- (sr3.west);
     \draw [->, rounded corners] (hr.east) -- +(.5,0) |- (t1.east);
   \end{tikzpicture}
-  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- issues a call to trampoline that contains the first 2 instructions of the original \texttt{sys\_read} functions and a jump the third instruction in \texttt{sys\_read}. Note that the assembler instructions may not be one-hundret percent working, but are more thought to illustrate the whole process.}
+  \caption{Mechanism of \texttt{hooked\_socketcall} in connection with \texttt{trampoline}. The modified \texttt{sys\_read} ensures that we jump to the rootkit's \texttt{hooked\_read} function, which -- for its part -- issues a call to trampoline. The first two instructions of \texttt{trampoline} are equivalent to those in the original \texttt{sys\_read} function and are followed by a jump to the third instruction of \texttt{sys\_read}. Finally, the \texttt{ret} of the original \texttt{sys\_read} makes us return to our \texttt{hooked\_read}, where we continue with processing the return values.}
   \label{fig:trampoline-hooked-read}
 \end{figure}
 
