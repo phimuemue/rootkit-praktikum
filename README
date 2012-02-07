@@ -1,19 +1,18 @@
-Rootkit Programming - Exercise 7
+Rootkit Programming - Final Excersise
 
-You should have received a PDF containing how to compile, insert and use our rootkit module.
-Please note that this PDF is not the final writeup. For now, it just serves just as a manual
-for you so that you know how to use the module.
+Note: You can have a look at the thing at
 
-Nonetheless, we describe here shortly how to enter a command over the covert communication
-channel: Let's assume, you want to hide TCP socket with port 1234. Therefore, you first have
-to load the module:
+https://github.com/phimuemue/rootkit-praktikum
 
+You should have received a PDF describing all relevant things we implemented
+for this praktikum (this PDF should reside in the folder doc).
+
+To build and load the rootkit, you should be able to simply do the following:
+make
 insmod cool_mod.ko
 
-After this, you can just type in commands in the shell. Commands start with "### " (three 
-hashes followed by a space). Afterwards comes the command, and - separated by again a space -
-optional an argument. The whole command is confirmed by a space again. So, you just enter the 
-following into the command line:
+Commands can then be entered directly into a shell and have the following
+format (three hashes, one space, command, arguments):
 
 ###<space>hidetcp<space>1234<space>
 
